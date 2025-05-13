@@ -1,5 +1,10 @@
 // public/assets/js/dashboard-main.js
 
+// ... outras declarações de variáveis ...
+const promptMainTextEditorContainer = document.getElementById('prompt_main_text_editor_container');
+const hiddenPromptTextarea = document.getElementById('prompt_main_text_hidden'); // Referência ao textarea oculto
+let ckEditorPromptInstance; // Variável para a instância do CKEditor
+// ...
 document.addEventListener('DOMContentLoaded', function () {
     // Elementos do Formulário Principal de Geração
     const promptGenerationForm = document.getElementById('promptGenerationForm');
@@ -511,5 +516,55 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
+if (promptMainTextEditorContainer && typeof ClassicEditor !== 'undefined') {
+    ClassicEditor
+        .create(promptMainTextEditorContainer, {
+            toolbar: {
+                items: [
+                    'undo', 'redo',
+                    '|', 'heading',
+                    '|', 'bold', 'italic', 
+                    // 'underline', 'strikethrough', // Adicione se desejar
+                    '|', 'link', 
+                    '|', 'bulletedList', 'numberedList',
+                    // '|', 'outdent', 'indent', // Adicione se desejar
+                    // '|', 'blockQuote', // Adicione se desejar
+                    // '|', 'insertTable', // Adicione se desejar
+                ],
+                shouldNotGroupWhenFull: true
+            },
+            language: 'pt-br', // Garanta que o pacote de idioma pt-br esteja disponível no CDN ou build
+            placeholder: 'Descreva o que você quer que a IA gere. Use {{placeholders}} se estiver usando um template.',
+            // Outras configurações: https://ckeditor.com/docs/ckeditor5/latest/api/module_core_editor_editorconfig-EditorConfig.html
+        })
+        .then(editor => {
+            ckEditorPromptInstance = editor;
+            console.log('CKEditor para prompt principal inicializado.');
 
+            // Sincronizar com o textarea oculto para validação e submissão fácil
+            editor.model.document.on('change:data', () => {
+                if (hiddenPromptTextarea) {
+                    hiddenPromptTextarea.value = editor.getData();
+                }
+            });
+            // Se houver valor inicial no textarea oculto (ex: vindo de um template carregado antes do editor)
+            if (hiddenPromptTextarea && hiddenPromptTextarea.value.trim() !== '') {
+                 editor.setData(hiddenPromptTextarea.value);
+            }
+
+        })
+        .catch(error => {
+            console.error('Erro ao inicializar CKEditor para prompt principal:', error);
+            // Fallback: se o CKEditor falhar, talvez mostrar o textarea que está oculto (requer mais lógica)
+            if(hiddenPromptTextarea) {
+                // Poderia remover o container do CKEditor e mostrar o textarea
+                // promptMainTextEditorContainer.style.display = 'none';
+                // hiddenPromptTextarea.style.display = 'block';
+                // hiddenPromptTextarea.rows = 8; // Restaurar atributos visuais
+                // alert("O editor avançado não pôde ser carregado. Usando campo de texto simples.");
+            }
+        });
+} else if (typeof ClassicEditor === 'undefined') {
+    console.warn('CKEditor não está definido. Verifique se o script do CKEditor foi carregado.');
+}
 }); // Fim do DOMContentLoaded

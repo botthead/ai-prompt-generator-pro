@@ -1,60 +1,65 @@
-// auth.js - Scripts para páginas de autenticação (login, registro, perfil)
+// public/assets/js/auth.js
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Exemplo de validação de formulário de registro (pode ser mais robusto)
     const registerForm = document.getElementById('registerForm');
     if (registerForm) {
         registerForm.addEventListener('submit', function(event) {
             const password = registerForm.querySelector('#password');
             const confirmPassword = registerForm.querySelector('#confirm_password');
             
-            if (password && confirmPassword && password.value !== confirmPassword.value) {
-                event.preventDefault(); // Impede o envio do formulário
-                // Remover mensagens de erro anteriores
-                const existingError = registerForm.querySelector('.password-mismatch-error');
-                if(existingError) existingError.remove();
+            // Limpar mensagens de erro anteriores do JS
+            const existingError = registerForm.querySelector('.password-mismatch-error-js');
+            if(existingError) existingError.remove();
+            if(confirmPassword) confirmPassword.classList.remove('is-invalid');
 
-                // Adicionar mensagem de erro
-                const errorDiv = document.createElement('div');
-                errorDiv.className = 'alert alert-danger mt-2 password-mismatch-error';
-                errorDiv.textContent = 'As senhas não coincidem!';
-                confirmPassword.parentNode.insertBefore(errorDiv, confirmPassword.nextSibling);
-                confirmPassword.classList.add('is-invalid');
-                confirmPassword.focus();
-                // showGlobalToast('error', 'As senhas não coincidem!'); // Usando SweetAlert Toast
+
+            if (password && confirmPassword && password.value !== confirmPassword.value) {
+                event.preventDefault(); 
+                showGlobalToast('error', 'As senhas não coincidem!'); 
+                
+                if(confirmPassword){
+                    confirmPassword.classList.add('is-invalid');
+                    // Adicionar a mensagem de feedback do Bootstrap para acessibilidade, mesmo com o toast
+                    const feedbackDiv = document.createElement('div');
+                    feedbackDiv.className = 'invalid-feedback password-mismatch-error-js d-block'; // d-block para forçar exibição
+                    feedbackDiv.textContent = 'As senhas não coincidem.';
+                    confirmPassword.parentNode.insertBefore(feedbackDiv, confirmPassword.nextSibling);
+                    confirmPassword.focus();
+                }
                 return false;
             }
-            // Outras validações (força da senha, etc.) podem ser adicionadas aqui
         });
     }
 
-    // Exemplo de validação de formulário de alteração de senha
-    const changePasswordForm = document.getElementById('changePasswordForm'); // Supondo que o form de senha no profile.php tenha este ID
+    const changePasswordForm = document.getElementById('changePasswordForm');
     if (changePasswordForm) {
         changePasswordForm.addEventListener('submit', function(event) {
             const newPassword = changePasswordForm.querySelector('#new_password');
             const confirmNewPassword = changePasswordForm.querySelector('#confirm_new_password');
 
+            const existingError = changePasswordForm.querySelector('.new-password-mismatch-error-js');
+            if(existingError) existingError.remove();
+            if(confirmNewPassword) confirmNewPassword.classList.remove('is-invalid');
+
             if (newPassword && confirmNewPassword && newPassword.value !== confirmNewPassword.value) {
                 event.preventDefault();
-                const existingError = changePasswordForm.querySelector('.new-password-mismatch-error');
-                if(existingError) existingError.remove();
+                showGlobalToast('error', 'As novas senhas não coincidem!');
                 
-                const errorDiv = document.createElement('div');
-                errorDiv.className = 'alert alert-danger mt-2 new-password-mismatch-error';
-                errorDiv.textContent = 'As novas senhas não coincidem!';
-                confirmNewPassword.parentNode.insertBefore(errorDiv, confirmNewPassword.nextSibling);
-                confirmNewPassword.classList.add('is-invalid');
-                confirmNewPassword.focus();
+                if(confirmNewPassword){
+                    confirmNewPassword.classList.add('is-invalid');
+                    const feedbackDiv = document.createElement('div');
+                    feedbackDiv.className = 'invalid-feedback new-password-mismatch-error-js d-block';
+                    feedbackDiv.textContent = 'As novas senhas não coincidem.';
+                    confirmNewPassword.parentNode.insertBefore(feedbackDiv, confirmNewPassword.nextSibling);
+                    confirmNewPassword.focus();
+                }
                 return false;
             }
         });
     }
 
-
-    // Mostrar/Ocultar API Key no perfil
     const toggleApiKeyBtn = document.getElementById('toggleApiKeyVisibility');
-    const apiKeyInput = document.getElementById('api_key'); // Supondo que o input da API Key tenha este ID
+    const apiKeyInput = document.getElementById('api_key'); 
 
     if (toggleApiKeyBtn && apiKeyInput) {
         toggleApiKeyBtn.addEventListener('click', function() {
@@ -67,5 +72,4 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-
-}); 
+});

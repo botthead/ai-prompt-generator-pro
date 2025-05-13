@@ -1,3 +1,20 @@
+    <!-- ... outros scripts como jQuery, Bootstrap, Axios, SweetAlert2 ... -->
+
+    <!-- CKEditor 5 (Build Clássico via CDN) -->
+    <script src="https://cdn.ckeditor.com/ckeditor5/41.4.2/classic/ckeditor.js"></script>
+    
+    <!-- Seu JavaScript customizado principal -->
+    <script src="<?php echo htmlspecialchars(BASE_URL); ?>/assets/js/main.js"></script>
+
+    <?php
+    // Incluir scripts JS específicos da página, se definidos
+    if (isset($pageScripts) && is_array($pageScripts)) {
+        foreach ($pageScripts as $script) {
+            echo '<script src="' . htmlspecialchars(BASE_URL) . '/assets/js/' . htmlspecialchars($script) . '"></script>' . "\n";
+        }
+    }
+    ?>
+    <!-- ... resto do footer ... -->
 </div> <!-- Fecha .main-content .container do header.php -->
 
 <footer class="footer mt-auto py-3 bg-light border-top">
@@ -65,6 +82,7 @@ if (isset($pageScripts) && is_array($pageScripts)) {
     //     showGlobalLoader(false);
     //     return Promise.reject(error);
     // });
+
 </script>
 
 </body>

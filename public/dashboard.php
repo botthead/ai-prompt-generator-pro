@@ -32,7 +32,12 @@ $csrfToken = Auth::generateCsrfToken(); // Para o formulário de geração princ
         </a>
     </div>
 </div>
-
+<!-- ADICIONADO/MODIFICADO AQUI -->
+<div id="apiKeyStatusIndicator" class="alert alert-info small py-2 mb-3" role="alert" style="display: none;">
+    <i class="fas fa-key me-2"></i>Status da API Key Gemini: <strong id="apiKeyStatusText">Verificando...</strong>
+    <a href="profile.php" class="alert-link ms-2 fw-bold" id="apiKeyConfigureLink" style="display:none;">Configurar Chave Agora</a>
+</div>
+<!-- FIM DA ADIÇÃO/MODIFICAÇÃO -->
 <div class="row">
     <!-- Coluna Principal: Geração de Prompt -->
     <div class="col-lg-7 col-md-12 mb-4">
@@ -44,17 +49,14 @@ $csrfToken = Auth::generateCsrfToken(); // Para o formulário de geração princ
                 <form id="promptGenerationForm">
                     <input type="hidden" name="csrf_token_generate" value="<?php echo htmlspecialchars($csrfToken); ?>">
                     
-                    <div class="mb-3">
-                        <label for="promptTemplate" class="form-label">Usar Template:</label>
-                        <select class="form-select" id="promptTemplate">
-                            <option value="">-- Nenhum Template (Começar do Zero) --</option>
-                            <?php foreach ($userTemplates as $template): ?>
-                                <option value="<?php echo htmlspecialchars($template['id']); ?>">
-                                    <?php echo htmlspecialchars($template['name']); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
+                        <div class="mb-3">
+                            <label for="prompt_main_text_editor_container" class="form-label">Seu Prompt Base (ou estrutura do template):<span class="text-danger">*</span></label>
+                            <div id="prompt_main_text_editor_container">
+                                <!-- CKEditor será instanciado aqui pelo JS -->
+                            </div>
+                            <textarea name="prompt_main_text" id="prompt_main_text_hidden" style="display:none;" required></textarea> <!-- Hidden textarea para validação e submissão se JS falhar ou para conveniência -->
+                            <small class="form-text text-muted mt-1">Se selecionou um template, a estrutura aparecerá aqui. Preencha os campos personalizados (se houver) que aparecerão acima.</small>
+                        </div>
 
                     <div id="customTemplateFieldsContainer" class="mb-3">
                         <!-- Campos do template carregado via JS aparecerão aqui -->

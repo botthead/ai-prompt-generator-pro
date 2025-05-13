@@ -1,40 +1,42 @@
-// main.js - Scripts Globais da Aplicação
+// public/assets/js/main.js - Scripts Globais da Aplicação
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Ativar tooltips do Bootstrap em toda a aplicação (se houver)
+    // Ativar tooltips do Bootstrap em toda a aplicação
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
 
-    // Adicionar classe 'active' ao link de navegação da página atual
-    // (Já está sendo feito no nav.php com basename, mas pode ser uma alternativa via JS)
-    // const currentPage = window.location.pathname.split("/").pop();
-    // if (currentPage) {
-    //     const navLinks = document.querySelectorAll('.navbar-nav .nav-link');
-    //     navLinks.forEach(link => {
-    //         if (link.getAttribute('href') === currentPage || link.getAttribute('href') === `index.php?page=${currentPage}`) {
-    //             link.classList.add('active');
-    //             // Se for um dropdown item, ativar o pai também
-    //             const dropdownToggle = link.closest('.dropdown')?.querySelector('.dropdown-toggle');
-    //             if (dropdownToggle) {
-    //                 dropdownToggle.classList.add('active');
-    //             }
-    //         }
-    //     });
-    // }
+    // Configuração global do Axios para incluir o token CSRF nos headers
+    // para requisições POST, PUT, DELETE, PATCH.
+    const csrfTokenMeta = document.querySelector('meta[name="csrf-token"]');
+    if (csrfTokenMeta) {
+        const csrfToken = csrfTokenMeta.getAttribute('content');
+        if (csrfToken) {
+            axios.defaults.headers.common['X-CSRF-TOKEN'] = csrfToken;
+            // console.log('CSRF token set for Axios requests via X-CSRF-TOKEN header.');
+        } else {
+            console.warn('CSRF token meta tag found, but its content is empty.');
+        }
+    } else {
+        console.warn('CSRF token meta tag not found. AJAX POST/PUT/DELETE requests might fail CSRF validation if not handled autrement.');
+    }
 
-    // Exemplo de função para exibir mensagens com SweetAlert2
-    window.showGlobalAlert = function(type, title, text = '') {
+    // Funções globais para alertas e toasts
+    window.showGlobalAlert = function(type, title, text = '', footer = '') {
         Swal.fire({
             icon: type, // 'success', 'error', 'warning', 'info', 'question'
             title: title,
             text: text,
-            confirmButtonColor: '#0d6efd' // Cor primária do Bootstrap
+            footer: footer,
+            confirmButtonColor: '#0d6efd', // Cor primária do Bootstrap
+            customClass: {
+                popup: 'shadow-lg rounded-3', // Adiciona sombra e bordas arredondadas
+            }
         });
     };
     
-    window.showGlobalToast = function(type, title, position = 'top-end', timer = 3000) {
+    window.showGlobalToast = function(type, title, position = 'top-end', timer = 3000, timerProgressBar = true) {
          Swal.fire({
             toast: true,
             position: position,
@@ -42,27 +44,31 @@ document.addEventListener('DOMContentLoaded', function() {
             title: title,
             showConfirmButton: false,
             timer: timer,
-            timerProgressBar: true,
+            timerProgressBar: timerProgressBar,
             didOpen: (toast) => {
                 toast.addEventListener('mouseenter', Swal.stopTimer);
                 toast.addEventListener('mouseleave', Swal.resumeTimer);
+            },
+            customClass: {
+                popup: 'colored-toast' // Classe para customização se necessário
             }
         });
     };
 
-
-    // Funções para o loader global (já no footer.php, mas podem ser centralizadas aqui)
-    // window.showGlobalLoader = function(show) {
-    //     const overlay = document.getElementById('loadingOverlay');
-    //     if (overlay) {
-    //         overlay.style.display = show ? 'flex' : 'none';
-    //     }
-    // }
-
-    // Exemplo de como usar o loader com Axios (já no footer.php, mas pode ser centralizado)
+    // Função global para mostrar/esconder o overlay de carregamento (já definida no footer, mas pode ser chamada daqui)
+    window.showGlobalLoader = function(show) {
+        const overlay = document.getElementById('loadingOverlay');
+        if (overlay) {
+            overlay.style.display = show ? 'flex' : 'none';
+        }
+    };
+    
+    // Opcional: Interceptadores Axios para loader global (se não quiser em cada chamada)
+    // Cuidado: Isso pode ativar o loader para chamadas muito rápidas que não precisam dele.
     // if (typeof axios !== 'undefined') {
     //     axios.interceptors.request.use(function (config) {
-    //         if (!config.doNotShowLoader) { // Adicionar flag para não mostrar em certas requisições
+    //         // Adicionar uma flag na config da request se não quiser o loader global para ela
+    //         if (!config.noLoader) { 
     //             showGlobalLoader(true);
     //         }
     //         return config;
@@ -71,25 +77,31 @@ document.addEventListener('DOMContentLoaded', function() {
     //         return Promise.reject(error);
     //     });
     //     axios.interceptors.response.use(function (response) {
-    //         showGlobalLoader(false);
+    //         // Apenas desliga o loader se ele foi ligado pela request (precisaria de lógica mais complexa)
+    //         // Por simplicidade, desligamos sempre, mas o ideal é controlar por request.
+    //         showGlobalLoader(false); 
     //         return response;
     //     }, function (error) {
     //         showGlobalLoader(false);
-    //         // Tratar erros globalmente se desejar
+    //         // Tratar erros globais do Axios se desejar, ex: 401 redirecionar para login
     //         // if (error.response && error.response.status === 401) {
-    //         //    showGlobalAlert('error', 'Sessão Expirada', 'Sua sessão expirou. Por favor, faça login novamente.');
-    //         //    setTimeout(() => window.location.href = 'login.php', 2000);
+    //         //    if (!window.location.pathname.endsWith('/login.php')) { // Evitar loop de redirect
+    //         //        showGlobalAlert('error', 'Sessão Expirada', 'Sua sessão expirou ou você não está autenticado. Redirecionando para login...');
+    //         //        setTimeout(() => window.location.href = (window.BASE_URL || '.') + '/login.php', 2500);
+    //         //    }
     //         // }
     //         return Promise.reject(error);
     //     });
     // }
 
-    console.log('AI Prompt Generator Pro - main.js loaded.');
+
+    console.log('AI Prompt Generator Pro - main.js loaded and configured.');
 });
 
-// Helper para sanitizar HTML (usar com cautela, bibliotecas como DOMPurify são melhores para XSS complexo)
+// Helper para sanitizar HTML (usar com cautela, DOMPurify é melhor para cenários complexos de XSS)
 function sanitizeHTML(str) {
+    if (str === null || typeof str === 'undefined') return '';
     const temp = document.createElement('div');
     temp.textContent = str;
     return temp.innerHTML;
-} 
+}

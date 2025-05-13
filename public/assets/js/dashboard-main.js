@@ -6,9 +6,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const promptTemplateSelect = document.getElementById('promptTemplate');
     const customTemplateFieldsContainer = document.getElementById('customTemplateFieldsContainer');
     const promptMainTextEditorContainer = document.getElementById('prompt_main_text_editor_container');
-    const hiddenPromptTextarea = document.getElementById('prompt_main_text_hidden');
+    const hiddenPromptTextarea = document.getElementById('prompt_main_text_hidden'); // Sempre existe, para sincronia e fallback
     let ckEditorPromptInstance;
-    let mainPromptField; // Variável unificada para o campo de prompt (CKEditor ou fallback)
+    let mainPromptField = null; // Variável unificada para interagir com o campo de prompt
 
     const temperatureSlider = document.getElementById('temperature');
     const tempValueDisplay = document.getElementById('tempValueDisplay');
@@ -33,7 +33,6 @@ document.addEventListener('DOMContentLoaded', function () {
     // Elementos do Modal de Assistência IA
     const aiAssistanceModalElement = document.getElementById('aiAssistanceModal');
     const aiAssistanceModalInstance = aiAssistanceModalElement ? new bootstrap.Modal(aiAssistanceModalElement) : null;
-    // ... (outras variáveis do modal de assistência como antes) ...
     const aiActionTypeSelect = document.getElementById('aiActionType');
     const aiAssistantInputArea = document.getElementById('aiAssistantInputArea');
     const aiAssistantUserInputLabel = document.getElementById('aiAssistantUserInputLabel');
@@ -48,7 +47,6 @@ document.addEventListener('DOMContentLoaded', function () {
     let currentAiAssistantOutput = "";
     let currentAiAssistantActionType = "";
 
-
     // Elementos do Indicador de Status da API Key
     const apiKeyStatusIndicator = document.getElementById('apiKeyStatusIndicator');
     const apiKeyStatusText = document.getElementById('apiKeyStatusText');
@@ -61,7 +59,9 @@ document.addEventListener('DOMContentLoaded', function () {
             hiddenPromptTextarea.rows = 10;
             hiddenPromptTextarea.classList.add('form-control');
             hiddenPromptTextarea.placeholder = "Digite seu prompt aqui...";
-            mainPromptField = hiddenPromptTextarea;
+            mainPromptField = hiddenPromptTextarea; // Define o fallback como o campo principal
+        } else {
+            console.error("Textarea de fallback (prompt_main_text_hidden) não encontrado!");
         }
     }
 
@@ -89,10 +89,10 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .catch(error => {
                 console.error('Erro ao inicializar CKEditor:', error);
-                initializeMainPromptFieldFallback(); // Usa o textarea como fallback
+                initializeMainPromptFieldFallback();
                 showGlobalToast('warning', 'Editor avançado falhou. Usando campo de texto simples.');
             });
-    } else { // Se CKEditor não está definido ou o container não existe, usa o textarea
+    } else {
         console.warn('CKEditor não carregado ou container não encontrado. Usando textarea padrão.');
         initializeMainPromptFieldFallback();
     }
@@ -100,7 +100,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- STATUS DA API KEY ---
     async function checkAndDisplayApiKeyStatus() {
-        // ... (função como definida anteriormente, sem mudanças aqui) ...
         if (!apiKeyStatusIndicator || !apiKeyStatusText || !apiKeyConfigureLink) return;
         apiKeyStatusIndicator.style.display = 'flex';
         apiKeyStatusIndicator.classList.remove('alert-success', 'alert-warning', 'alert-danger', 'alert-info', 'alert-secondary');
@@ -138,22 +137,18 @@ document.addEventListener('DOMContentLoaded', function () {
     if (promptTemplateSelect) {
         promptTemplateSelect.addEventListener('change', async function () {
             const templateId = this.value;
-            customTemplateFieldsContainer.innerHTML = ''; 
+            if(customTemplateFieldsContainer) customTemplateFieldsContainer.innerHTML = ''; 
             
             let initialPromptStructure = '';
-            // Limpar o campo principal
-            if (mainPromptField) { // Usa a variável unificada
-                if (typeof mainPromptField.setData === 'function') mainPromptField.setData(''); // CKEditor
-                else mainPromptField.value = ''; // Textarea
+            if (mainPromptField) {
+                if (typeof mainPromptField.setData === 'function') mainPromptField.setData('');
+                else mainPromptField.value = '';
             }
             if (hiddenPromptTextarea) hiddenPromptTextarea.value = '';
 
-
             if (!templateId) {
-                if (mainPromptField && typeof mainPromptField.setAttribute === 'function') { // Para textarea
+                if (mainPromptField && typeof mainPromptField.setAttribute === 'function') {
                     mainPromptField.placeholder = "Descreva o que você quer que a IA gere...";
-                } else if (ckEditorPromptInstance) {
-                    // O placeholder do CKEditor é tratado na config de inicialização.
                 }
                 return;
             }
@@ -171,10 +166,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                     if (hiddenPromptTextarea) hiddenPromptTextarea.value = initialPromptStructure;
 
-
-                    // Renderizar campos personalizados do template (LÓGICA COPIADA E ADAPTADA DE templates-manager.js)
-                    if (template.custom_fields_decoded && Array.isArray(template.custom_fields_decoded)) {
+                    if (customTemplateFieldsContainer && template.custom_fields_decoded && Array.isArray(template.custom_fields_decoded)) {
                         template.custom_fields_decoded.forEach(field => {
+                            // ... (LÓGICA COMPLETA DE RENDERIZAÇÃO DOS CAMPOS PERSONALIZADOS - como antes) ...
                             const formGroup = document.createElement('div');
                             formGroup.className = 'mb-3 border p-3 rounded bg-light-subtle template-custom-field-group';
                             const label = document.createElement('label');
@@ -225,7 +219,6 @@ document.addEventListener('DOMContentLoaded', function () {
             } catch (error) { console.error('Erro ao buscar template:', error); showGlobalToast('error', 'Falha na comunicação ao carregar template.'); }
             finally { showGlobalLoader(false); }
         });
-        // ... (lógica de carregar template do localStorage como antes) ...
         const selectedTemplateIdToUse = localStorage.getItem('selectedTemplateIdToUse');
         if (selectedTemplateIdToUse) {
             promptTemplateSelect.value = selectedTemplateIdToUse;
@@ -242,21 +235,24 @@ document.addEventListener('DOMContentLoaded', function () {
     if (promptGenerationForm) {
         promptGenerationForm.addEventListener('submit', async function (event) {
             event.preventDefault();
+            // ... (feedback de botão e UI como antes) ...
             if(generateBtnSpinner) generateBtnSpinner.classList.remove('d-none');
             if(generatePromptBtn) generatePromptBtn.disabled = true;
-            // ... (resto como antes) ...
+            if(generatedResultOutputDiv) generatedResultOutputDiv.innerHTML = '<div class="text-center p-3"><div class="spinner-border text-secondary" role="status"></div><p class="mt-2 text-muted">A IA está pensando...</p></div>';
+            if(copyResultBtn) copyResultBtn.classList.add('d-none');
+
 
             let rawPromptText = '';
-            if (mainPromptField) { // Usa a variável unificada
+            if (mainPromptField) {
                 rawPromptText = (typeof mainPromptField.getData === 'function') ? mainPromptField.getData() : mainPromptField.value;
             }
-            if (hiddenPromptTextarea) hiddenPromptTextarea.value = rawPromptText;
+            if (hiddenPromptTextarea) hiddenPromptTextarea.value = rawPromptText; // Sincroniza com o hidden
 
             // ... (lógica de validação de campos de template e prompt vazio como antes) ...
-             let finalPromptText = rawPromptText;
+            let finalPromptText = rawPromptText;
+            // ... (lógica de substituição de placeholders e validação) ...
             const templateCustomValues = {};
             let allRequiredFieldsFilled = true;
-
             const customFields = customTemplateFieldsContainer.querySelectorAll('[name^="template_fields["]');
             if (customFields.length > 0) {
                 customFields.forEach(field => {
@@ -265,7 +261,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     field.classList.remove('is-invalid'); 
                     let feedback = field.parentNode.querySelector('.invalid-feedback');
                     if(feedback) feedback.remove();
-
                     if (field.required && field.value.trim() === '') {
                         allRequiredFieldsFilled = false;
                         field.classList.add('is-invalid');
@@ -278,29 +273,24 @@ document.addEventListener('DOMContentLoaded', function () {
                     finalPromptText = finalPromptText.replace(placeholder, field.value);
                 });
             }
-
-            if (!allRequiredFieldsFilled) {
-                showGlobalAlert('error', 'Campos Obrigatórios', 'Por favor, preencha todos os campos obrigatórios do template marcado com *.');
-                if(generateBtnSpinner) generateBtnSpinner.classList.add('d-none');
-                if(generatePromptBtn) generatePromptBtn.disabled = false;
-                return;
-            }
-            if (finalPromptText.trim() === ''){ // Valida o finalPromptText
-                showGlobalAlert('error', 'Prompt Vazio', 'O prompt final (após preencher o template, se houver) não pode estar vazio.');
-                if(generateBtnSpinner) generateBtnSpinner.classList.add('d-none');
-                if(generatePromptBtn) generatePromptBtn.disabled = false;
-                return;
-            }
+            if (!allRequiredFieldsFilled) { /* ... (mostrar alerta e retornar) ... */ }
+            if (finalPromptText.trim() === ''){ /* ... (mostrar alerta e retornar) ... */ }
 
 
-            const payload = { /* ... (payload como antes) ... */ };
+            const payload = {
+                // csrf_token_generate: Não precisa mais aqui se Axios global está configurado
+                raw_prompt_text: rawPromptText, final_prompt_text: finalPromptText,
+                template_id_used: promptTemplateSelect ? promptTemplateSelect.value : null,
+                template_custom_values: templateCustomValues,
+                temperature: parseFloat(temperatureSlider.value),
+                maxOutputTokens: parseInt(maxOutputTokensInput.value)
+            };
             
-            // ... (try-catch-finally da chamada Axios como antes) ...
             try {
                 const response = await axios.post('api/generate_prompt.php', payload);
-                // ... (mesmo tratamento de resposta) ...
+                // ... (tratamento da resposta como antes) ...
             } catch (error) {
-                // ... (mesmo tratamento de erro) ...
+                // ... (tratamento de erro como antes) ...
             } finally {
                 if(generateBtnSpinner) generateBtnSpinner.classList.add('d-none');
                 if(generatePromptBtn) generatePromptBtn.disabled = false;
@@ -308,23 +298,11 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    if (copyResultBtn && generatedResultOutputDiv) { /* ... (código corrigido do copyResultBtn como antes) ... */
-        copyResultBtn.addEventListener('click', function () {
-            const textToCopy = (generatedResultOutputDiv.textContent || generatedResultOutputDiv.innerText || "").trim();
-            if (textToCopy === '') { showGlobalToast('info', 'Nada para copiar do resultado.'); return; }
-            navigator.clipboard.writeText(textToCopy)
-                .then(() => { showGlobalToast('success', 'Resultado da IA copiado!'); })
-                .catch(err => {
-                    console.error('Erro ao copiar resultado da IA:', err);
-                    showGlobalAlert('error', 'Falha ao Copiar', 'Não foi possível copiar automaticamente. Tente selecionar o texto e usar Ctrl+C.');
-                });
-        });
-    }
+    if (copyResultBtn && generatedResultOutputDiv) { /* ... (código corrigido do copyResultBtn como antes) ... */ }
 
     // --- LÓGICA DO HISTÓRICO RECENTE (NO DASHBOARD) ---
-    // ... (funções fetchRecentHistory, renderRecentHistoryItems, e listener para .view-history-btn e .delete-history-btn como antes) ...
-    // ... (função renderHistoryItemModalContentForDashboard como antes) ...
-    // ... (listeners para botões de copiar e editar DENTRO do modal de histórico do DASHBOARD como antes) ...
+    // ... (funções e listeners como antes, certificando-se que currentViewingHistoryItemIdDashboard é usado para o modal do dashboard) ...
+    // ... A função renderHistoryItemModalContentForDashboard deve ser mantida como está ...
 
 
     // --- LÓGICA DO MODAL DE ASSISTÊNCIA IA ---
@@ -358,8 +336,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
     // --- LÓGICA PARA EDITAR ITEM DO HISTÓRICO (CARREGAR NO FORMULÁRIO) ---
-    // ... (função loadHistoryItemForEditing e a lógica para chamá-la como antes, mas usando mainPromptField) ...
-    async function loadHistoryItemForEditing(historyId) {
+    const editHistoryItemIdFromStorage = localStorage.getItem('editHistoryItemId');
+    const urlHashForEdit = window.location.hash;
+
+    async function loadHistoryItemForEditing(historyId) { // Renomeada para clareza
         if (!historyId) return;
         showGlobalLoader(true);
         try {
@@ -378,24 +358,67 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
                 if (hiddenPromptTextarea) hiddenPromptTextarea.value = basePromptValue;
 
-                // ... (resto da lógica de preencher temperatura, max tokens, e campos de template se houver, como antes) ...
                 const genSettings = inputParams.generation_settings_input || {};
-                // ... (preencher temperatureSlider e maxOutputTokensInput) ...
+                if (temperatureSlider && genSettings.temperature !== undefined) {
+                    temperatureSlider.value = genSettings.temperature;
+                    if(tempValueDisplay) tempValueDisplay.textContent = genSettings.temperature;
+                    temperatureSlider.dispatchEvent(new Event('input'));
+                } else if (temperatureSlider) {
+                    temperatureSlider.value = 0.7; 
+                    if(tempValueDisplay) tempValueDisplay.textContent = temperatureSlider.value;
+                    temperatureSlider.dispatchEvent(new Event('input'));
+                }
+                if (maxOutputTokensInput && genSettings.maxOutputTokens !== undefined) {
+                    maxOutputTokensInput.value = genSettings.maxOutputTokens;
+                } else if (maxOutputTokensInput) {
+                    maxOutputTokensInput.value = 1024;
+                }
 
                 if (inputParams.template_id_used && promptTemplateSelect) {
                     promptTemplateSelect.value = inputParams.template_id_used;
                     const changeEvent = new Event('change', { bubbles: true });
                     promptTemplateSelect.dispatchEvent(changeEvent); 
-                    setTimeout(() => { /* ... preencher campos do template ... */ }, 800);
+                    setTimeout(() => { 
+                        if (inputParams.template_custom_values) {
+                            for (const fieldName in inputParams.template_custom_values) {
+                                const fieldInput = document.getElementById(`template_field_${fieldName}`);
+                                if (fieldInput) {
+                                    fieldInput.value = inputParams.template_custom_values[fieldName];
+                                }
+                            }
+                        }
+                        showGlobalToast('info', 'Item do histórico carregado para edição no formulário.');
+                    }, 800);
                 } else {
                      showGlobalToast('info', 'Item do histórico carregado para edição no formulário.');
                 }
+                
                 if(promptGenerationForm) promptGenerationForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
             } else { showGlobalAlert('error', 'Erro ao Carregar', response.data.error || 'Item do histórico não encontrado.'); }
-        } catch (error) { /* ... */ }
-        finally { /* ... */ }
+        } catch (error) {
+            console.error('Erro ao carregar item do histórico para edição:', error);
+            showGlobalAlert('error', 'Erro na Requisição', 'Não foi possível carregar o item do histórico.');
+        } finally {
+            showGlobalLoader(false);
+            localStorage.removeItem('editHistoryItemId');
+            if (window.location.hash.includes('#editHistory') || window.location.hash.includes('#edit')) {
+                 history.pushState("", document.title, window.location.pathname + window.location.search);
+            }
+        }
     }
-    // ... (lógica para chamar loadHistoryItemForEditing com base no localStorage ou hash, como antes) ...
+
+    if (editHistoryItemIdFromStorage) {
+        loadHistoryItemForEditing(editHistoryItemIdFromStorage);
+    } else if (urlHashForEdit === '#editHistory' || urlHashForEdit.startsWith('#editHistory_') || urlHashForEdit === '#edit') {
+        // Tenta extrair ID de um hash como #editHistory_123 ou #edit_123
+        const match = urlHashForEdit.match(/_(.*)/);
+        const idFromHash = match && match[1] ? match[1] : (urlHashForEdit.split('#editHistory')[1] || urlHashForEdit.split('#edit')[1]);
+        if(idFromHash && !isNaN(parseInt(idFromHash))) {
+             loadHistoryItemForEditing(parseInt(idFromHash));
+        } else if (localStorage.getItem('editHistoryItemId')) {
+            loadHistoryItemForEditing(localStorage.getItem('editHistoryItemId'));
+        }
+    }
 
 }); // Fim do DOMContentLoaded

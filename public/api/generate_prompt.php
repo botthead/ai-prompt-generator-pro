@@ -1,10 +1,11 @@
 <?php
 header('Content-Type: application/json');
-require_once __DIR__ . '/../../src/Config/AppConfig.php'; // Para constantes e session_start
+require_once __DIR__ . '/../../src/Config/AppConfig.php'; // Para constantes e session_start via Auth
 require_once __DIR__ . '/../../src/Core/Auth.php';
 require_once __DIR__ . '/../../src/Core/PromptService.php';
 
-$auth = new Auth(); // Auth construtor já chama session_start
+$auth = new Auth(); // Auth construtor já chama session_start e configura sessão
+
 if (!$auth->isLoggedIn()) {
     http_response_code(401);
     echo json_encode(['error' => 'Usuário não autenticado. Por favor, faça login.']);
@@ -17,29 +18,38 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// Verificar CSRF token se enviado (recomendado para formulários principais, não tanto para APIs puras se autenticadas de outra forma)
-// Mas como este é chamado de um formulário no dashboard, vamos verificar.
-$requestData = json_decode(file_get_contents('php://input'), true);
-if (!isset($requestData['csrf_token_generate']) || !Auth::verifyCsrfToken($requestData['csrf_token_generate'])) {
-    http_response_code(403);
+// Verificar CSRF token do header (enviado pelo Axios globalmente)
+$submittedToken = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? null;
+if (!$submittedToken || !Auth::verifyCsrfToken($submittedToken)) {
+    http_response_code(403); // Forbidden
     echo json_encode(['error' => 'Falha na validação CSRF. Recarregue a página e tente novamente.']);
     exit;
 }
+// Após a verificação bem-sucedida, para tokens CSRF que são por sessão (não single-use), não precisamos invalidá-lo aqui.
+// Se fosse single-use, você chamaria Auth::generateCsrfToken() para gerar um novo para a próxima requisição.
 
-$finalPromptText = $requestData['final_prompt_text'] ?? ''; // Este será o prompt após processar templates
-$rawPromptText = $requestData['raw_prompt_text'] ?? ''; // O que o usuário digitou, ou estrutura do template
+$requestData = json_decode(file_get_contents('php://input'), true);
+
+// O token csrf_token_generate não é mais esperado no corpo da $requestData
+// $csrfTokenFromBody = $requestData['csrf_token_generate'] ?? ''; // LINHA REMOVIDA
+
+$finalPromptText = $requestData['final_prompt_text'] ?? '';
+$rawPromptText = $requestData['raw_prompt_text'] ?? $finalPromptText; // Fallback se raw não for enviado
 $templateIdUsed = $requestData['template_id_used'] ?? null;
-$templateCustomValues = $requestData['template_custom_values'] ?? []; // Valores preenchidos para os campos do template
+$templateCustomValues = $requestData['template_custom_values'] ?? [];
 
-// Parâmetros de Geração
 $generationParams = [];
 if (isset($requestData['temperature']) && is_numeric($requestData['temperature'])) {
     $generationParams['temperature'] = (float)$requestData['temperature'];
+} else {
+    $generationParams['temperature'] = 0.7; // Valor padrão se não enviado ou inválido
 }
 if (isset($requestData['maxOutputTokens']) && is_numeric($requestData['maxOutputTokens'])) {
     $generationParams['maxOutputTokens'] = (int)$requestData['maxOutputTokens'];
+} else {
+    $generationParams['maxOutputTokens'] = 1024; // Valor padrão
 }
-// Adicionar topK, topP se forem enviados
+// Adicionar validação para topK, topP se forem implementados
 
 if (empty($finalPromptText)) {
     http_response_code(400);
@@ -53,41 +63,38 @@ $promptService = new PromptService();
 $result = $promptService->generateGeminiPrompt($userId, $finalPromptText, $generationParams);
 
 if (isset($result['error'])) {
-    // Tentar determinar um código HTTP mais apropriado
-    $httpStatusCode = 500; // Erro genérico do servidor/API
+    $httpStatusCode = 500; 
     if (strpos(strtolower($result['error']), 'chave da api') !== false || strpos(strtolower($result['error']), 'api key') !== false) {
-        $httpStatusCode = 400; // Bad Request - problema de configuração do usuário
+        $httpStatusCode = 400; 
     } elseif (strpos(strtolower($result['error']), 'bloqueada por motivos de segurança') !== false) {
-        $httpStatusCode = 400; // Bad Request - prompt do usuário causou bloqueio
+        $httpStatusCode = 400; 
     }
     http_response_code($httpStatusCode);
     echo json_encode(['error' => $result['error']]);
 } else if (isset($result['success'])) {
-    // Montar os parâmetros de input para o histórico
     $inputParamsForHistory = [
-        'raw_prompt_text' => $rawPromptText, // O que o usuário digitou ou a estrutura do template
-        'final_prompt_text' => $finalPromptText, // O prompt enviado à API após substituições
+        'raw_prompt_text' => $rawPromptText,
+        'final_prompt_text' => $finalPromptText,
         'template_id_used' => $templateIdUsed,
         'template_custom_values' => $templateCustomValues,
-        'generation_settings_input' => $generationParams // Parâmetros que o usuário configurou
+        'generation_settings_input' => $generationParams
     ];
     
-    // Parâmetros realmente usados pela API Gemini (pode ser igual a generationParams ou ter defaults da API)
-    $geminiParamsUsedForHistory = $generationParams; // Simplificação, a API pode retornar os defaults usados
+    $geminiParamsUsedForHistory = $generationParams; // Ou o que a API Gemini realmente usou/retornou
     
     $promptService->saveToHistory(
         $userId, 
         json_encode($inputParamsForHistory), 
         $result['success'], 
         json_encode($geminiParamsUsedForHistory),
-        $result['promptTokenCount'] ?? null,      // Se a API retornar
-        $result['candidatesTokenCount'] ?? null   // Se a API retornar
+        $result['promptTokenCount'] ?? null,
+        $result['candidatesTokenCount'] ?? null
     );
 
     echo json_encode([
         'success' => true, 
         'generated_text' => $result['success'],
-        // 'promptTokenCount' => $result['promptTokenCount'] ?? null,
+        // 'promptTokenCount' => $result['promptTokenCount'] ?? null, // Opcional retornar ao frontend
         // 'candidatesTokenCount' => $result['candidatesTokenCount'] ?? null
     ]);
 } else {

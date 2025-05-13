@@ -11,28 +11,35 @@ if (!$auth->isLoggedIn()) {
     exit;
 }
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') { // Espera POST para deleção
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
-    echo json_encode(['error' => 'Método não permitido.']);
+    echo json_encode(['error' => 'Método não permitido. Apenas POST é aceito para exclusão.']);
     exit;
 }
 
-$requestData = json_decode(file_get_contents('php://input'), true);
-// Assume que o token CSRF é enviado no corpo JSON para POSTs de API
-// ou você pode enviá-lo como um header customizado.
-// Para simplicidade aqui, vamos assumir que foi enviado no corpo.
-if (!isset($requestData['csrf_token']) || !Auth::verifyCsrfToken($requestData['csrf_token'])) {
+// Verificar CSRF token do header
+$submittedToken = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? null;
+if (!$submittedToken || !Auth::verifyCsrfToken($submittedToken)) {
     http_response_code(403);
     echo json_encode(['error' => 'Falha na validação CSRF.']);
     exit;
 }
 
+// Os dados (como o ID) são esperados no corpo JSON da requisição POST
+$requestData = json_decode(file_get_contents('php://input'), true);
 
-$templateId = filter_var($requestData['id'] ?? null, FILTER_VALIDATE_INT);
+// O token CSRF não é mais esperado no corpo da $requestData
+// if (!isset($requestData['csrf_token']) ... ) // LINHA REMOVIDA
+
+$templateId = null;
+if (isset($requestData['id'])) {
+    $templateId = filter_var($requestData['id'], FILTER_VALIDATE_INT);
+}
+
 
 if (!$templateId) {
     http_response_code(400);
-    echo json_encode(['error' => 'ID do template inválido ou não fornecido.']);
+    echo json_encode(['error' => 'ID do template inválido ou não fornecido no corpo da requisição.']);
     exit;
 }
 
@@ -42,8 +49,9 @@ $templateManager = new TemplateManager();
 if ($templateManager->deleteTemplateForUser($templateId, $userId)) {
     echo json_encode(['success' => true, 'message' => 'Template excluído com sucesso.']);
 } else {
-    http_response_code(500); // Ou 404 se o template não foi encontrado para o usuário
-    echo json_encode(['error' => 'Erro ao excluir o template ou template não encontrado.']);
+    // Pode ser que o template não exista ou não pertença ao usuário, ou erro de DB
+    http_response_code(404); // Ou 500 se for erro de DB
+    echo json_encode(['error' => 'Erro ao excluir o template, template não encontrado ou não pertence ao usuário.']);
 }
 exit;
 ?>

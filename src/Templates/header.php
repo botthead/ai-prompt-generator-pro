@@ -1,21 +1,29 @@
 <?php
 // Assegura que AppConfig.php seja carregado primeiro para ter as constantes.
-// __DIR__ resolve o caminho absoluto para o diretório atual do arquivo.
 require_once __DIR__ . '/../Config/AppConfig.php';
 
 // Inicia a sessão se ainda não estiver iniciada, usando as configurações de AppConfig.php
 if (session_status() == PHP_SESSION_NONE) {
-    session_name(SESSION_NAME); // Define o nome da sessão antes de session_start()
+    session_name(SESSION_NAME); 
     session_set_cookie_params([
         'lifetime' => SESSION_TIMEOUT_SECONDS,
-        'path' => '/', // Ajuste o path se sua aplicação não estiver na raiz do domínio/subdomínio
-        'domain' => '', // Deixe em branco para localhost ou defina seu domínio
-        'secure' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on', // True se HTTPS
+        'path' => '/', 
+        'domain' => '', 
+        'secure' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on',
         'httponly' => true,
-        'samesite' => 'Lax' // Ou 'Strict' para maior segurança, mas pode quebrar fluxos OAuth/SAML
+        'samesite' => 'Lax'
     ]);
     session_start();
 }
+
+// Gerar token CSRF para a meta tag.
+// A classe Auth deve ser carregada para usar Auth::generateCsrfToken().
+// Se nav.php (incluído abaixo) já usa Auth, ela será carregada.
+// Caso contrário, um require_once aqui seria prudente.
+if (!class_exists('Auth')) {
+    require_once __DIR__ . '/../Core/Auth.php';
+}
+$csrfTokenForMeta = Auth::generateCsrfToken();
 ?>
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -23,6 +31,9 @@ if (session_status() == PHP_SESSION_NONE) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo isset($pageTitle) ? htmlspecialchars($pageTitle) . ' - ' . htmlspecialchars(APP_NAME) : htmlspecialchars(APP_NAME); ?></title>
+    
+    <!-- CSRF Token para AJAX Requests -->
+    <meta name="csrf-token" content="<?php echo htmlspecialchars($csrfTokenForMeta); ?>">
     
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
@@ -33,9 +44,6 @@ if (session_status() == PHP_SESSION_NONE) {
     <!-- SweetAlert2 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
     
-    <!-- CKEditor 5 (Se for carregar via CDN - considerar build local para produção) -->
-    <!-- <script src="https://cdn.ckeditor.com/ckeditor5/41.4.2/classic/ckeditor.js"></script> -->
-    
     <!-- Custom CSS -->
     <link rel="stylesheet" href="<?php echo htmlspecialchars(BASE_URL); ?>/assets/css/style.css">
     
@@ -44,38 +52,19 @@ if (session_status() == PHP_SESSION_NONE) {
             display: flex;
             flex-direction: column;
             min-height: 100vh;
-            padding-top: 56px; /* Altura da navbar fixa */
+            padding-top: 70px; /* Ajuste se a altura da navbar fixa (navbar-dark tem padding, então 70px pode ser mais adequado) */
         }
-        .main-content {
-            flex: 1;
+        .main-content { /* Este é o container principal para o conteúdo da página */
+            flex: 1; /* Faz com que o conteúdo principal ocupe o espaço disponível */
         }
-        .footer {
-            background-color: #f8f9fa;
-        }
-        /* Para o spinner de carregamento global */
-        #loadingOverlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(255, 255, 255, 0.7);
-            z-index: 1055; /* Acima da maioria dos elementos, mas abaixo de modais se necessário */
-            display: none; /* Escondido por padrão */
-            justify-content: center;
-            align-items: center;
-        }
-        #loadingOverlay .spinner-border {
-            width: 3rem;
-            height: 3rem;
-        }
+        /* Footer já tem estilos em style.css, mas podemos garantir que ele fique no final */
+        /* #loadingOverlay já está no style.css, não precisa duplicar aqui */
     </style>
 </head>
 <body>
 
 <?php
 // Inclui a barra de navegação.
-// __DIR__ garante que o caminho é relativo ao arquivo header.php.
 include_once __DIR__ . '/nav.php';
 ?>
 
@@ -100,4 +89,6 @@ include_once __DIR__ . '/nav.php';
              '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
         unset($_SESSION['info_message']);
     }
-    ?> 
+    ?>
+    <!-- O CONTEÚDO DA PÁGINA ESPECÍFICA COMEÇA DEPOIS DESTE HEADER -->
+    <!-- E O FOOTER.PHP FECHARÁ O <div class="main-content container...">, <body> e <html> -->

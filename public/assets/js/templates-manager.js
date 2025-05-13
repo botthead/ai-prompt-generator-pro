@@ -106,6 +106,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- SALVAR/ATUALIZAR TEMPLATE ---
     if (templateForm) {
         templateForm.addEventListener('submit', async function (event) {
+
             event.preventDefault();
             saveTemplateBtnSpinner.classList.remove('d-none');
             saveTemplateBtn.disabled = true;
@@ -119,14 +120,14 @@ document.addEventListener('DOMContentLoaded', function () {
                     headers: { 'Content-Type': 'multipart/form-data' } // Necessário para FormData
                 });
 
-                if (response.data.success) {
-                    showGlobalToast('success', templateIdInput.value ? 'Template atualizado com sucesso!' : 'Template criado com sucesso!');
-                    templateFormModal.hide();
-                    // Atualizar a lista de templates na página (idealmente sem recarregar tudo)
-                    fetchAndRenderTemplates();
-                } else {
-                    showGlobalAlert('error', 'Erro ao Salvar', response.data.error || 'Não foi possível salvar o template.');
-                }
+
+           if (response.data.success) {
+    showGlobalToast('success', templateIdInput.value ? 'Template atualizado com sucesso!' : 'Template criado com sucesso!'); // Já estava bom
+    templateFormModal.hide();
+    fetchAndRenderTemplates(); // Recarrega a lista
+} else {
+    showGlobalAlert('error', 'Erro ao Salvar Template', response.data.error || 'Não foi possível salvar o template.'); // Já estava bom
+}
             } catch (error) {
                 console.error('Erro ao salvar template:', error);
                 let errorMsg = 'Falha de comunicação ao salvar o template.';

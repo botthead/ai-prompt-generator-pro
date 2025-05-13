@@ -1,0 +1,17 @@
+RewriteEngine On
+RewriteBase /ai-prompt-generator-pro/public/
+
+# Redireciona todas as requisições para arquivos não existentes para index.php
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php?url=$1 [L,QSA]
+
+<Files ".env">
+    Require all denied
+</Files>
+<Files "composer.json">
+    Require all denied
+</Files>
+<Files "composer.lock">
+    Require all denied
+</Files> 

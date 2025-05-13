@@ -1,0 +1,34 @@
+# Arquivos de configuração local e variáveis de ambiente
+.env
+src/Config/AppConfig.php.local # Se você criar uma cópia local com dados sensíveis
+
+# Pastas de dependências (se usar Composer)
+/vendor/
+composer.lock # Se não quiser versionar o lock específico, embora geralmente seja bom versioná-lo
+
+# Arquivos de IDE e sistema operacional
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Arquivos de build do CKEditor (se você baixou e buildou localmente e não quer versionar o build)
+# public/assets/js/ckeditor5/build/ # Exemplo, ajuste o caminho se necessário
+
+# Outros arquivos temporários ou de cache
+cache/
+temp/
+tmp/
+
+# Se você tiver um diretório de uploads que não deve ser versionado
+# public/uploads/

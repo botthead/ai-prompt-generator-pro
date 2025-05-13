@@ -5,28 +5,31 @@ document.addEventListener('DOMContentLoaded', function () {
     const promptGenerationForm = document.getElementById('promptGenerationForm');
     const promptTemplateSelect = document.getElementById('promptTemplate');
     const customTemplateFieldsContainer = document.getElementById('customTemplateFieldsContainer');
-    // const promptMainTextTextarea = document.getElementById('prompt_main_text'); // Se ainda estiver usando textarea
     const promptMainTextEditorContainer = document.getElementById('prompt_main_text_editor_container'); // Para CKEditor
-    const hiddenPromptTextarea = document.getElementById('prompt_main_text_hidden');
+    const hiddenPromptTextarea = document.getElementById('prompt_main_text_hidden'); // Fallback e sincronização
     let ckEditorPromptInstance;
     const temperatureSlider = document.getElementById('temperature');
     const tempValueDisplay = document.getElementById('tempValueDisplay');
     const maxOutputTokensInput = document.getElementById('maxOutputTokens');
     const generatePromptBtn = document.getElementById('generatePromptBtn');
-    const generateBtnSpinner = generatePromptBtn.querySelector('.spinner-border');
+    const generateBtnSpinner = generatePromptBtn ? generatePromptBtn.querySelector('.spinner-border') : null;
 
     // Elementos da Saída da IA
     const generatedResultOutputDiv = document.getElementById('generatedResultOutput');
     const copyResultBtn = document.getElementById('copyResultBtn');
 
-    // Elementos do Histórico Recente
+    // Elementos do Histórico Recente (no Dashboard)
     const recentHistoryContainer = document.getElementById('recentHistoryContainer');
-    const historyItemModalElement = document.getElementById('historyItemModal');
-    const historyItemModalInstance = historyItemModalElement ? new bootstrap.Modal(historyItemModalElement) : null;
-    const historyItemModalBody = document.getElementById('historyItemModalBody');
-    const copyHistoryInputBtn = document.getElementById('copyHistoryInputBtn'); // No modal de histórico do dashboard
-    const copyHistoryOutputBtn = document.getElementById('copyHistoryOutputBtn'); // No modal de histórico do dashboard
-    let currentViewingHistoryItemId = null;
+    // O modal de histórico é global, mas os listeners específicos do dashboard são aqui
+    const historyItemModalElementForDashboard = document.getElementById('historyItemModal'); // Mesmo ID do modal de history.php
+    const historyItemModalInstanceForDashboard = historyItemModalElementForDashboard ? new bootstrap.Modal(historyItemModalElementForDashboard) : null;
+    const historyItemModalBodyForDashboard = document.getElementById('historyItemModalBody'); // Mesmo ID
+    // Botões do modal de histórico, mas podem ser usados por este JS se o modal for o mesmo
+    const modalCopyInputBtnDashboard = document.getElementById('modalCopyHistoryInputBtn');
+    const modalCopyOutputBtnDashboard = document.getElementById('modalCopyHistoryOutputBtn');
+    const modalEditBtnDashboard = document.getElementById('modalEditHistoryItemBtn'); 
+    let currentViewingHistoryItemIdDashboard = null;
+
 
     // Elementos do Modal de Assistência IA
     const aiAssistanceModalElement = document.getElementById('aiAssistanceModal');
@@ -39,7 +42,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const aiAssistantNewToneSelect = document.getElementById('aiAssistantNewTone');
     const aiSuggestionCountInput = document.getElementById('aiSuggestionCount');
     const runAiAssistantBtn = document.getElementById('runAiAssistantBtn');
-    const runAiAssistantBtnSpinner = runAiAssistantBtn.querySelector('.spinner-border');
+    const runAiAssistantBtnSpinner = runAiAssistantBtn ? runAiAssistantBtn.querySelector('.spinner-border') : null;
     const aiAssistantResultOutputDiv = document.getElementById('aiAssistantResultOutput');
     const applyAiAssistantResultBtn = document.getElementById('applyAiAssistantResultBtn');
     let currentAiAssistantOutput = "";
@@ -64,35 +67,38 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(editor => {
                 ckEditorPromptInstance = editor;
                 console.log('CKEditor para prompt principal inicializado.');
-                if (hiddenPromptTextarea) { // Sincronização inicial
-                    editor.setData(hiddenPromptTextarea.value || '');
-                }
-                editor.model.document.on('change:data', () => {
-                    if (hiddenPromptTextarea) {
+                if (hiddenPromptTextarea) {
+                    editor.setData(hiddenPromptTextarea.value || ''); // Sincronização inicial
+                    editor.model.document.on('change:data', () => { // Sincronização contínua
                         hiddenPromptTextarea.value = editor.getData();
-                    }
-                });
+                    });
+                }
             })
             .catch(error => {
                 console.error('Erro ao inicializar CKEditor:', error);
-                if(hiddenPromptTextarea && promptMainTextEditorContainer) { // Fallback visual
-                     promptMainTextEditorContainer.innerHTML = ''; // Limpa o div do editor
-                     const fallbackTextarea = document.createElement('textarea');
-                     fallbackTextarea.className = 'form-control';
-                     fallbackTextarea.id = 'prompt_main_text_fallback'; // Novo ID para evitar conflito
-                     fallbackTextarea.name = 'prompt_main_text';
-                     fallbackTextarea.rows = 8;
-                     fallbackTextarea.placeholder = "Editor avançado falhou. Descreva o que você quer que a IA gere.";
-                     fallbackTextarea.required = true;
-                     fallbackTextarea.value = hiddenPromptTextarea.value || '';
-                     promptMainTextEditorContainer.appendChild(fallbackTextarea);
+                if(hiddenPromptTextarea && promptMainTextEditorContainer) {
+                     promptMainTextEditorContainer.style.display = 'none';
+                     hiddenPromptTextarea.style.display = 'block';
+                     hiddenPromptTextarea.rows = 10;
+                     hiddenPromptTextarea.classList.add('form-control');
+                     hiddenPromptTextarea.placeholder = "O editor avançado não pôde ser carregado. Digite seu prompt aqui.";
                      showGlobalToast('warning', 'Editor avançado falhou. Usando campo de texto simples.');
                 }
             });
     } else if (typeof ClassicEditor === 'undefined' && promptMainTextEditorContainer) {
-        console.warn('CKEditor não está definido. Verifique o script. Usando textarea padrão.');
-        // Se o container existe, mas o editor não, podemos criar o textarea dinamicamente ou garantir que o hidden seja usado
-        if(hiddenPromptTextarea) hiddenPromptTextarea.style.display = 'block'; hiddenPromptTextarea.rows = 8;
+        console.warn('CKEditor não está definido. Usando textarea padrão.');
+        if(hiddenPromptTextarea && promptMainTextEditorContainer) {
+            promptMainTextEditorContainer.style.display = 'none';
+            hiddenPromptTextarea.style.display = 'block';
+            hiddenPromptTextarea.rows = 10;
+            hiddenPromptTextarea.classList.add('form-control');
+            hiddenPromptTextarea.placeholder = "CKEditor não carregado. Digite seu prompt aqui.";
+        }
+    } else if (!promptMainTextEditorContainer && hiddenPromptTextarea) {
+        // Caso o div do CKEditor não exista, mas o textarea hidden sim, mostre o textarea.
+        hiddenPromptTextarea.style.display = 'block';
+        hiddenPromptTextarea.rows = 10;
+        hiddenPromptTextarea.classList.add('form-control');
     }
 
 
@@ -100,33 +106,37 @@ document.addEventListener('DOMContentLoaded', function () {
     async function checkAndDisplayApiKeyStatus() {
         if (!apiKeyStatusIndicator || !apiKeyStatusText || !apiKeyConfigureLink) return;
         
-        apiKeyStatusIndicator.style.display = 'flex'; // Usar flex para alinhar itens no alerta
-        apiKeyStatusIndicator.classList.remove('alert-success', 'alert-warning', 'alert-danger', 'alert-info');
-        apiKeyStatusIndicator.classList.add('alert-secondary'); // Estado inicial
+        apiKeyStatusIndicator.style.display = 'flex';
+        apiKeyStatusIndicator.classList.remove('alert-success', 'alert-warning', 'alert-danger', 'alert-info', 'alert-secondary');
+        apiKeyStatusIndicator.classList.add('alert-secondary');
         apiKeyStatusText.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Verificando status da API Key...';
         apiKeyConfigureLink.style.display = 'none';
 
         try {
-            const response = await axios.get('api/get_api_key_status.php'); // Endpoint criado no Passo 14.6
+            const response = await axios.get('api/get_api_key_status.php');
             apiKeyStatusIndicator.classList.remove('alert-secondary');
-            if (response.data.hasApiKey) {
-                apiKeyStatusText.textContent = 'Configurada e pronta para uso.';
+            if (response.data.hasApiKey && response.data.keySeemsValid) {
+                apiKeyStatusText.textContent = 'Configurada e parece válida (será testada no uso).';
                 apiKeyStatusIndicator.classList.add('alert-success');
                 apiKeyConfigureLink.style.display = 'none';
-            } else {
+            } else if (response.data.hasApiKey && !response.data.keySeemsValid) {
+                apiKeyStatusText.textContent = 'Configurada, mas há um problema ao acessá-la. Reconfigure.';
+                apiKeyStatusIndicator.classList.add('alert-danger');
+                apiKeyConfigureLink.style.display = 'inline-block'; // inline-block para links
+            } else { 
                 apiKeyStatusText.textContent = 'Não configurada. Alguns recursos podem não funcionar.';
                 apiKeyStatusIndicator.classList.add('alert-warning');
-                apiKeyConfigureLink.style.display = 'inline';
+                apiKeyConfigureLink.style.display = 'inline-block';
             }
         } catch (error) {
             console.error("Erro ao verificar status da API Key:", error);
             apiKeyStatusIndicator.classList.remove('alert-secondary');
             apiKeyStatusText.textContent = 'Não foi possível verificar o status da API Key.';
             apiKeyStatusIndicator.classList.add('alert-danger');
-            apiKeyConfigureLink.style.display = 'inline';
+            apiKeyConfigureLink.style.display = 'inline-block';
         }
     }
-    checkAndDisplayApiKeyStatus();
+    if(apiKeyStatusIndicator) checkAndDisplayApiKeyStatus();
 
 
     // --- LÓGICA DE TEMPLATES ---
@@ -135,24 +145,15 @@ document.addEventListener('DOMContentLoaded', function () {
             const templateId = this.value;
             customTemplateFieldsContainer.innerHTML = ''; 
             
-            let initialPromptStructure = '';
-            if (ckEditorPromptInstance) {
-                ckEditorPromptInstance.setData('');
-            } else if (document.getElementById('prompt_main_text_fallback')) { // Se o fallback textarea existe
-                document.getElementById('prompt_main_text_fallback').value = '';
-            } else if (hiddenPromptTextarea) { // Fallback para o hidden (se CKEditor não carregou)
-                 hiddenPromptTextarea.value = '';
-            }
-
+            let editorContent = '';
+            if (ckEditorPromptInstance) ckEditorPromptInstance.setData('');
+            else if (document.getElementById('prompt_main_text_fallback')) document.getElementById('prompt_main_text_fallback').value = '';
+            else if (hiddenPromptTextarea) hiddenPromptTextarea.value = '';
 
             if (!templateId) {
-                // Placeholder do CKEditor ou textarea deve ser redefinido
-                if (ckEditorPromptInstance) {
-                    // O placeholder do CKEditor é definido na inicialização. Para resetar, pode-se limpar
-                    // e talvez re-focar para mostrar o placeholder se estiver vazio.
-                } else if (document.getElementById('prompt_main_text_fallback')) {
-                     document.getElementById('prompt_main_text_fallback').placeholder = "Descreva o que você quer que a IA gere...";
-                }
+                if (document.getElementById('prompt_main_text_fallback')) document.getElementById('prompt_main_text_fallback').placeholder = "Descreva o que você quer que a IA gere...";
+                else if (hiddenPromptTextarea) hiddenPromptTextarea.placeholder = "Descreva o que você quer que a IA gere...";
+                // O placeholder do CKEditor é gerenciado por ele mesmo.
                 return;
             }
 
@@ -161,101 +162,72 @@ document.addEventListener('DOMContentLoaded', function () {
                 const response = await axios.get(`api/get_template_details.php?id=${templateId}`);
                 if (response.data.success && response.data.template) {
                     const template = response.data.template;
-                    initialPromptStructure = template.prompt_structure || '';
+                    editorContent = template.prompt_structure || '';
                     
-                    if (ckEditorPromptInstance) {
-                        ckEditorPromptInstance.setData(initialPromptStructure);
-                    } else if (document.getElementById('prompt_main_text_fallback')) {
-                        document.getElementById('prompt_main_text_fallback').value = initialPromptStructure;
-                    } else if (hiddenPromptTextarea) {
-                        hiddenPromptTextarea.value = initialPromptStructure;
-                    }
-
+                    if (ckEditorPromptInstance) ckEditorPromptInstance.setData(editorContent);
+                    else if (document.getElementById('prompt_main_text_fallback')) document.getElementById('prompt_main_text_fallback').value = editorContent;
+                    else if (hiddenPromptTextarea) hiddenPromptTextarea.value = editorContent;
 
                     if (template.custom_fields_decoded && Array.isArray(template.custom_fields_decoded)) {
                         template.custom_fields_decoded.forEach(field => {
                             const formGroup = document.createElement('div');
-                            formGroup.className = 'mb-3 border p-3 rounded bg-light-subtle'; // Estilo para destacar campos de template
-
+                            formGroup.className = 'mb-3 border p-3 rounded bg-light-subtle template-custom-field-group';
                             const label = document.createElement('label');
                             label.htmlFor = `template_field_${field.name}`;
                             label.className = 'form-label fw-medium';
                             label.textContent = field.label || field.name;
                             if (field.required) {
                                 const requiredSpan = document.createElement('span');
-                                requiredSpan.className = 'text-danger ms-1';
-                                requiredSpan.textContent = '*';
+                                requiredSpan.className = 'text-danger ms-1'; requiredSpan.textContent = '*';
                                 label.appendChild(requiredSpan);
                             }
                             formGroup.appendChild(label);
-
                             let inputElement;
-                            // ... (código para criar inputElement como no templates-manager.js) ...
-                            // Vou simplificar aqui para brevidade, mas a lógica de criação dos campos é a mesma.
-                            // Certifique-se de copiar a lógica completa de criação de campos de templates-manager.js
-                            // ou refatorar para uma função compartilhada.
-                            // --- INÍCIO DA LÓGICA DE CRIAÇÃO DE CAMPO (COPIAR/ADAPTAR DE templates-manager.js) ---
                             switch (field.type) {
                                 case 'textarea':
-                                    inputElement = document.createElement('textarea');
-                                    inputElement.rows = 3;
-                                    break;
+                                    inputElement = document.createElement('textarea'); inputElement.rows = 3; break;
                                 case 'number':
-                                    inputElement = document.createElement('input');
-                                    inputElement.type = 'number';
-                                    if (field.min !== undefined) inputElement.min = field.min;
-                                    if (field.max !== undefined) inputElement.max = field.max;
+                                    inputElement = document.createElement('input'); inputElement.type = 'number';
+                                    if (field.min !== undefined && field.min !== null) inputElement.min = field.min;
+                                    if (field.max !== undefined && field.max !== null) inputElement.max = field.max;
                                     break;
                                 case 'select':
                                     inputElement = document.createElement('select');
                                     if (field.options && Array.isArray(field.options)) {
-                                        const defaultOption = document.createElement('option');
-                                        defaultOption.value = "";
+                                        const defaultOption = document.createElement('option'); defaultOption.value = "";
                                         defaultOption.textContent = `-- Selecione ${field.label || field.name} --`;
+                                        if (!field.required || field.default === "") defaultOption.selected = true;
                                         inputElement.appendChild(defaultOption);
-                                        field.options.forEach(optValue => { // Assumindo que options é array de strings
-                                            const optionEl = document.createElement('option');
-                                            optionEl.value = optValue;
-                                            optionEl.textContent = optValue;
+                                        field.options.forEach(optValue => {
+                                            const optionEl = document.createElement('option'); optionEl.value = optValue; optionEl.textContent = optValue;
+                                            if (field.default === optValue) optionEl.selected = true;
                                             inputElement.appendChild(optionEl);
                                         });
                                     }
                                     break;
-                                case 'text':
-                                default:
-                                    inputElement = document.createElement('input');
-                                    inputElement.type = 'text';
-                                    break;
+                                default: inputElement = document.createElement('input'); inputElement.type = 'text'; break;
                             }
-                            inputElement.className = 'form-control form-control-sm';
-                            inputElement.id = `template_field_${field.name}`;
+                            inputElement.className = 'form-control form-control-sm'; inputElement.id = `template_field_${field.name}`;
                             inputElement.name = `template_fields[${field.name}]`;
                             if (field.placeholder) inputElement.placeholder = field.placeholder;
-                            if (field.default !== undefined) inputElement.value = field.default;
+                            if (field.type !== 'select' && field.default !== undefined && field.default !== null) inputElement.value = field.default;
                             if (field.required) inputElement.required = true;
-                            // --- FIM DA LÓGICA DE CRIAÇÃO DE CAMPO ---
                             formGroup.appendChild(inputElement);
                             customTemplateFieldsContainer.appendChild(formGroup);
                         });
                     }
-                } else {
-                    showGlobalToast('error', response.data.error || 'Erro ao carregar template.');
-                }
-            } catch (error) {
-                console.error('Erro ao buscar template:', error);
-                showGlobalToast('error', 'Falha na comunicação ao carregar template.');
-            } finally {
-                showGlobalLoader(false);
-            }
+                } else { showGlobalToast('error', response.data.error || 'Erro ao carregar template.'); }
+            } catch (error) { console.error('Erro ao buscar template:', error); showGlobalToast('error', 'Falha na comunicação ao carregar template.'); }
+            finally { showGlobalLoader(false); }
         });
-    }
-     // Verifica se há um template selecionado para usar ao carregar o dashboard
-    const selectedTemplateIdToUse = localStorage.getItem('selectedTemplateIdToUse');
-    if (selectedTemplateIdToUse && promptTemplateSelect) {
-        promptTemplateSelect.value = selectedTemplateIdToUse;
-        const changeEvent = new Event('change', { bubbles: true });
-        promptTemplateSelect.dispatchEvent(changeEvent);
-        localStorage.removeItem('selectedTemplateIdToUse');
+        // Verifica se há um template selecionado para usar ao carregar o dashboard
+        const selectedTemplateIdToUse = localStorage.getItem('selectedTemplateIdToUse');
+        if (selectedTemplateIdToUse) {
+            promptTemplateSelect.value = selectedTemplateIdToUse;
+            const changeEvent = new Event('change', { bubbles: true });
+            promptTemplateSelect.dispatchEvent(changeEvent);
+            localStorage.removeItem('selectedTemplateIdToUse');
+        }
     }
 
 
@@ -263,34 +235,28 @@ document.addEventListener('DOMContentLoaded', function () {
     if (temperatureSlider && tempValueDisplay) {
         temperatureSlider.addEventListener('input', function () {
             tempValueDisplay.textContent = this.value;
-            tempValueDisplay.classList.remove('bg-secondary'); // Remove classe padrão
-            if(this.value >= 1.5) tempValueDisplay.className = 'badge bg-danger';
-            else if (this.value >= 0.9) tempValueDisplay.className = 'badge bg-warning';
-            else if (this.value <= 0.3) tempValueDisplay.className = 'badge bg-info';
-            else tempValueDisplay.className = 'badge bg-primary';
+            tempValueDisplay.classList.remove('bg-secondary', 'bg-danger', 'bg-warning', 'bg-info', 'bg-primary');
+            if(this.value >= 1.5) tempValueDisplay.classList.add('bg-danger');
+            else if (this.value >= 0.9) tempValueDisplay.classList.add('bg-warning');
+            else if (this.value <= 0.3) tempValueDisplay.classList.add('bg-info');
+            else tempValueDisplay.classList.add('bg-primary');
         });
-        // Trigger inicial para cor
-        temperatureSlider.dispatchEvent(new Event('input'));
+        temperatureSlider.dispatchEvent(new Event('input')); // Cor inicial
     }
 
     if (promptGenerationForm) {
         promptGenerationForm.addEventListener('submit', async function (event) {
             event.preventDefault();
-            generateBtnSpinner.classList.remove('d-none');
-            generatePromptBtn.disabled = true;
-            generatedResultOutputDiv.innerHTML = '<div class="text-center p-3"><div class="spinner-border text-secondary" role="status"></div><p class="mt-2 text-muted">A IA está pensando...</p></div>';
-            copyResultBtn.classList.add('d-none');
+            if(generateBtnSpinner) generateBtnSpinner.classList.remove('d-none');
+            if(generatePromptBtn) generatePromptBtn.disabled = true;
+            if(generatedResultOutputDiv) generatedResultOutputDiv.innerHTML = '<div class="text-center p-3"><div class="spinner-border text-secondary" role="status"></div><p class="mt-2 text-muted">A IA está pensando...</p></div>';
+            if(copyResultBtn) copyResultBtn.classList.add('d-none');
 
             let rawPromptText = '';
-            if (ckEditorPromptInstance) {
-                rawPromptText = ckEditorPromptInstance.getData();
-            } else if (document.getElementById('prompt_main_text_fallback')) {
-                rawPromptText = document.getElementById('prompt_main_text_fallback').value;
-            } else if (hiddenPromptTextarea) {
-                rawPromptText = hiddenPromptTextarea.value;
-            }
-            if (hiddenPromptTextarea) hiddenPromptTextarea.value = rawPromptText;
-
+            if (ckEditorPromptInstance) rawPromptText = ckEditorPromptInstance.getData();
+            else if (document.getElementById('prompt_main_text_fallback')) rawPromptText = document.getElementById('prompt_main_text_fallback').value;
+            else if (hiddenPromptTextarea) rawPromptText = hiddenPromptTextarea.value;
+            if (hiddenPromptTextarea) hiddenPromptTextarea.value = rawPromptText; // Sincroniza
 
             let finalPromptText = rawPromptText;
             const templateCustomValues = {};
@@ -301,19 +267,17 @@ document.addEventListener('DOMContentLoaded', function () {
                 customFields.forEach(field => {
                     const fieldName = field.name.match(/template_fields\[(.*?)\]/)[1];
                     templateCustomValues[fieldName] = field.value;
+                    field.classList.remove('is-invalid'); // Limpa validação anterior
+                    let feedback = field.parentNode.querySelector('.invalid-feedback');
+                    if(feedback) feedback.remove();
+
                     if (field.required && field.value.trim() === '') {
                         allRequiredFieldsFilled = false;
-                        field.classList.add('is-invalid'); // Marcar campo inválido
-                        // Adicionar mensagem de erro específica se não existir
-                        let feedback = field.parentNode.querySelector('.invalid-feedback');
-                        if (!feedback) {
-                            feedback = document.createElement('div');
-                            feedback.className = 'invalid-feedback d-block';
-                            field.parentNode.appendChild(feedback);
-                        }
+                        field.classList.add('is-invalid');
+                        feedback = document.createElement('div');
+                        feedback.className = 'invalid-feedback d-block';
                         feedback.textContent = 'Este campo do template é obrigatório.';
-                    } else {
-                        field.classList.remove('is-invalid');
+                        field.parentNode.appendChild(feedback);
                     }
                     const placeholder = new RegExp(`\\{\\{\\s*${fieldName}\\s*\\}\\}`, 'g');
                     finalPromptText = finalPromptText.replace(placeholder, field.value);
@@ -322,21 +286,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (!allRequiredFieldsFilled) {
                 showGlobalAlert('error', 'Campos Obrigatórios', 'Por favor, preencha todos os campos obrigatórios do template marcado com *.');
-                generateBtnSpinner.classList.add('d-none');
-                generatePromptBtn.disabled = false;
+                if(generateBtnSpinner) generateBtnSpinner.classList.add('d-none');
+                if(generatePromptBtn) generatePromptBtn.disabled = false;
                 return;
             }
             if (rawPromptText.trim() === ''){
                 showGlobalAlert('error', 'Prompt Vazio', 'O campo do prompt base não pode estar vazio.');
-                 generateBtnSpinner.classList.add('d-none');
-                generatePromptBtn.disabled = false;
+                if(generateBtnSpinner) generateBtnSpinner.classList.add('d-none');
+                if(generatePromptBtn) generatePromptBtn.disabled = false;
                 return;
             }
 
-            const payload = {
+            const payload = { /* ... (payload como antes) ... */
                 csrf_token_generate: this.querySelector('input[name="csrf_token_generate"]').value,
-                raw_prompt_text: rawPromptText,
-                final_prompt_text: finalPromptText,
+                raw_prompt_text: rawPromptText, final_prompt_text: finalPromptText,
                 template_id_used: promptTemplateSelect ? promptTemplateSelect.value : null,
                 template_custom_values: templateCustomValues,
                 temperature: parseFloat(temperatureSlider.value),
@@ -346,90 +309,107 @@ document.addEventListener('DOMContentLoaded', function () {
             try {
                 const response = await axios.post('api/generate_prompt.php', payload);
                 if (response.data.success && response.data.generated_text) {
-                    generatedResultOutputDiv.innerHTML = ''; // Limpa "pensando..."
-                    // Para renderizar markdown, usar uma biblioteca como Marked.js
-                    // Por ora, apenas texto com quebras de linha.
-                    // Se quiser tratar como markdown:
-                    // if (typeof marked !== 'undefined') {
-                    //    generatedResultOutputDiv.innerHTML = marked.parse(response.data.generated_text);
-                    // } else {
-                    //    generatedResultOutputDiv.textContent = response.data.generated_text;
-                    // }
-                    generatedResultOutputDiv.textContent = response.data.generated_text; // Simples para agora
-                    copyResultBtn.classList.remove('d-none');
+                    if(generatedResultOutputDiv) generatedResultOutputDiv.textContent = response.data.generated_text;
+                    if(copyResultBtn) copyResultBtn.classList.remove('d-none');
                     showGlobalToast('success', 'Prompt gerado com sucesso!');
-                    fetchRecentHistory(); 
+                    // fetchRecentHistory(); // Adiar para não sobrecarregar em MVP
                 } else {
-                    generatedResultOutputDiv.textContent = '';
+                    if(generatedResultOutputDiv) generatedResultOutputDiv.textContent = '';
                     showGlobalAlert('error', 'Erro ao Gerar Prompt', response.data.error || 'Erro desconhecido do servidor.');
-                    // Atualizar status da API Key se o erro for relacionado a ela
                     if (response.data.error && (response.data.error.toLowerCase().includes('api key') || response.data.error.toLowerCase().includes('chave da api'))) {
-                        apiKeyStatusText.textContent = 'Inválida ou com problemas.';
-                        apiKeyStatusIndicator.className = 'alert alert-danger small py-2 mb-3 d-flex align-items-center justify-content-between'; // d-flex para alinhar
-                        apiKeyConfigureLink.style.display = 'inline';
+                        if(apiKeyStatusText) apiKeyStatusText.textContent = 'Inválida ou com problemas.';
+                        if(apiKeyStatusIndicator) apiKeyStatusIndicator.className = 'alert alert-danger small py-2 mb-3 d-flex align-items-center justify-content-between';
+                        if(apiKeyConfigureLink) apiKeyConfigureLink.style.display = 'inline-block';
                     }
                 }
-            } catch (error) {
-                console.error('Erro na requisição de geração:', error);
-                generatedResultOutputDiv.textContent = '';
+            } catch (error) { /* ... (tratamento de erro como antes) ... */
+                 console.error('Erro na requisição de geração:', error);
+                if(generatedResultOutputDiv) generatedResultOutputDiv.textContent = '';
                 let errorMsg = 'Falha na comunicação com o servidor.';
                 if (error.response && error.response.data && error.response.data.error) {
                     errorMsg = error.response.data.error;
                      if (error.response.status === 401 || (errorMsg.toLowerCase().includes('api key') || errorMsg.toLowerCase().includes('chave da api'))) {
-                        apiKeyStatusText.textContent = 'Não configurada ou inválida.';
-                        apiKeyStatusIndicator.className = 'alert alert-danger small py-2 mb-3 d-flex align-items-center justify-content-between';
-                        apiKeyConfigureLink.style.display = 'inline';
+                        if(apiKeyStatusText) apiKeyStatusText.textContent = 'Não configurada ou inválida.';
+                        if(apiKeyStatusIndicator) apiKeyStatusIndicator.className = 'alert alert-danger small py-2 mb-3 d-flex align-items-center justify-content-between';
+                        if(apiKeyConfigureLink) apiKeyConfigureLink.style.display = 'inline-block';
                     }
-                } else if (error.message) {
-                    errorMsg = error.message;
-                }
+                } else if (error.message) { errorMsg = error.message; }
                 showGlobalAlert('error', 'Erro na Requisição', errorMsg);
             } finally {
-                generateBtnSpinner.classList.add('d-none');
-                generatePromptBtn.disabled = false;
+                if(generateBtnSpinner) generateBtnSpinner.classList.add('d-none');
+                if(generatePromptBtn) generatePromptBtn.disabled = false;
             }
         });
     }
 
-    if (copyResultBtn) {
+        if (copyResultBtn && generatedResultOutputDiv) {
         copyResultBtn.addEventListener('click', function () {
-            // Se estiver usando HTML (ex: com marked.js), copiar o texto puro.
-            const textToCopy = generatedResultOutputDiv.textContent || generatedResultOutputDiv.innerText;
-            if (textToCopy.trim() === '') {
-                showGlobalToast('info', 'Nada para copiar.');
+            // Prioriza textContent, mas innerText pode ser um fallback para alguns casos (embora raro para divs com só texto)
+            const textToCopy = (generatedResultOutputDiv.textContent || generatedResultOutputDiv.innerText || "").trim();
+
+            if (textToCopy === '') {
+                showGlobalToast('info', 'Nada para copiar do resultado.');
                 return;
             }
+
             navigator.clipboard.writeText(textToCopy)
-                .then(() => showGlobalToast('success', 'Resultado copiado para a área de transferência!'))
+                .then(() => {
+                    showGlobalToast('success', 'Resultado da IA copiado para a área de transferência!');
+                })
                 .catch(err => {
-                    console.error('Erro ao copiar resultado:', err);
-                    showGlobalAlert('error', 'Falha ao Copiar', 'Não foi possível copiar. Verifique as permissões do navegador.');
+                    console.error('Erro ao copiar resultado da IA:', err);
+                    // Tentar um fallback para navegadores mais antigos ou se a permissão falhar (selecionar e copiar manualmente)
+                    // No entanto, o método execCommand é obsoleto e não recomendado.
+                    // A melhor abordagem é informar o usuário sobre a falha.
+                    showGlobalAlert('error', 'Falha ao Copiar', 'Não foi possível copiar automaticamente. Seu navegador pode não suportar esta ação ou as permissões de clipboard não foram concedidas. Você pode tentar selecionar o texto manualmente e usar Ctrl+C / Cmd+C.');
                 });
         });
     }
 
-    // --- LÓGICA DO HISTÓRICO RECENTE (FUNÇÕES REUTILIZÁVEIS) ---
-    async function fetchRecentHistory() {
+    // --- LÓGICA DO HISTÓRICO RECENTE (NO DASHBOARD) ---
+    async function fetchRecentHistory() { // Chamada se quiser atualizar dinamicamente
         if (!recentHistoryContainer) return;
-        // Esta função pode ser chamada para atualizar o histórico no dashboard.
-        // Por simplicidade, o dashboard.php já carrega os 5 mais recentes.
-        // Para uma atualização dinâmica real após gerar, este método faria uma chamada AJAX.
-        // Ex: const response = await axios.get('api/get_recent_history.php?limit=5');
-        // e depois chamaria renderRecentHistoryItems(response.data.history);
-        // Por agora, vamos simular um recarregamento ou apenas logar.
-        console.log("Tentativa de atualizar histórico recente (implementar busca AJAX se necessário).");
-        // Para forçar recarregamento da lista no dashboard (simples mas pode não ser ideal)
-        // window.location.reload(); // Descomente se quiser recarregar a página toda
+        try {
+            showGlobalLoader(true); // Mostrar loader para o container de histórico
+            const response = await axios.get('api/get_recent_history.php?limit=5'); // Endpoint hipotético
+            if (response.data.success && response.data.history) {
+               renderRecentHistoryItems(response.data.history, recentHistoryContainer);
+            } else {
+                // Não mostra erro aqui, pois pode ser que não haja histórico
+                console.warn("Não foi possível carregar histórico recente dinamicamente:", response.data.error);
+            }
+        } catch (error) {
+            console.error("Erro ao buscar histórico recente dinamicamente:", error);
+        } finally {
+            showGlobalLoader(false);
+        }
     }
 
-    function renderRecentHistoryItems(items, containerElement) { // Se for atualizar dinamicamente
+    function renderRecentHistoryItems(items, containerElement) {
         const listGroup = containerElement.querySelector('ul.list-group');
-        if (!listGroup) return;
-        listGroup.innerHTML = ''; // Limpa
+        if (!listGroup) { // Se não houver ul, cria uma.
+            containerElement.innerHTML = ''; // Limpa o container (ex: mensagem "carregando")
+            const ul = document.createElement('ul');
+            ul.className = 'list-group list-group-flush';
+            containerElement.appendChild(ul);
+        } else {
+            listGroup.innerHTML = ''; // Limpa itens existentes
+        }
+        
+        const targetList = containerElement.querySelector('ul.list-group'); // Pega a ul, seja nova ou existente
+
         if (items.length === 0) {
-            containerElement.innerHTML = '<p class="text-muted text-center mt-3">Nenhum prompt gerado ainda.</p>';
+            targetList.innerHTML = '<p class="text-muted text-center mt-3 mb-3">Nenhum prompt gerado recentemente.</p>';
+            // Esconder o link "Ver Histórico Completo" se não houver itens
+            const footerLink = containerElement.closest('.card').querySelector('.card-footer a');
+            if(footerLink) footerLink.style.display = 'none';
             return;
         }
+        // Mostrar o link "Ver Histórico Completo" se houver itens
+        const footerLinkToShow = containerElement.closest('.card').querySelector('.card-footer a');
+        if(footerLinkToShow) footerLinkToShow.style.display = 'inline-block';
+
+
         items.forEach(item => {
             const inputData = JSON.parse(item.input_parameters || '{}');
             const promptBasePreview = inputData.final_prompt_text || inputData.raw_prompt_text || 'N/A';
@@ -449,60 +429,75 @@ document.addEventListener('DOMContentLoaded', function () {
                         </button>
                     </div>
                 </div>
-                <p class="mb-1 mt-1">
+                <p class="mb-1 mt-1 small">
                     <strong>Input:</strong> ${sanitizeHTML(promptBasePreview.substring(0, 70))}${promptBasePreview.length > 70 ? '...' : ''}
                 </p>
-                <p class="mb-0 text-break">
+                <p class="mb-0 text-break small">
                     <small><strong>Output:</strong> ${sanitizeHTML(item.generated_text_preview.substring(0, 100))}${item.generated_text_preview.length > 100 ? '...' : ''}</small>
                 </p>
             `;
-            listGroup.appendChild(li);
+            targetList.appendChild(li);
         });
     }
     
-    // Delegação de eventos para botões de histórico no dashboard
     if (recentHistoryContainer) {
         recentHistoryContainer.addEventListener('click', async function(event) {
             const viewButton = event.target.closest('.view-history-btn');
             const deleteButton = event.target.closest('.delete-history-btn');
-            const pageCsrfToken = document.querySelector('input[name="csrf_token_generate"]')?.value;
+            const pageCsrfToken = document.querySelector('input[name="csrf_token_generate"]')?.value; // Token do form principal
 
             if (viewButton) {
-                currentViewingHistoryItemId = viewButton.dataset.historyId;
-                if(historyItemModalBody) historyItemModalBody.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status"></div><p class="mt-3 text-muted">Carregando detalhes...</p></div>';
-                //const modalEditBtn = document.getElementById('modalEditHistoryItemBtn'); // O do dashboard não tem esse botão por padrão
-                //if (modalEditBtn) modalEditBtn.classList.add('d-none');
-                if(historyItemModalInstance) historyItemModalInstance.show();
+                currentViewingHistoryItemIdDashboard = viewButton.dataset.historyId;
+                if(historyItemModalBodyForDashboard) historyItemModalBodyForDashboard.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status"></div><p class="mt-3 text-muted">Carregando detalhes...</p></div>';
+                if (modalEditBtnDashboard) { // Referência ao botão de editar do modal
+                    modalEditBtnDashboard.dataset.historyId = currentViewingHistoryItemIdDashboard; 
+                    modalEditBtnDashboard.classList.remove('d-none'); // Mostra o botão de editar
+                }
+                if(historyItemModalInstanceForDashboard) historyItemModalInstanceForDashboard.show();
                 
                 try {
-                    const response = await axios.get(`api/get_history_item.php?id=${currentViewingHistoryItemId}`);
+                    const response = await axios.get(`api/get_history_item.php?id=${currentViewingHistoryItemIdDashboard}`);
                     if (response.data.success && response.data.item) {
-                        renderHistoryItemModalContent(response.data.item, historyItemModalBody); // Passa o body do modal
-                        //if (modalEditBtn) modalEditBtn.classList.remove('d-none');
+                        renderHistoryItemModalContentForDashboard(response.data.item);
                     } else {
-                        if(historyItemModalBody) historyItemModalBody.innerHTML = `<div class="alert alert-danger">${response.data.error || 'Erro ao carregar item.'}</div>`;
+                        if(historyItemModalBodyForDashboard) historyItemModalBodyForDashboard.innerHTML = `<div class="alert alert-danger">${sanitizeHTML(response.data.error || 'Erro ao carregar item.')}</div>`;
                     }
                 } catch (error) {
-                    console.error("Erro ao buscar item do histórico:", error);
-                    if(historyItemModalBody) historyItemModalBody.innerHTML = `<div class="alert alert-danger">Falha na comunicação ao buscar detalhes.</div>`;
+                    console.error("Erro ao buscar item do histórico (dashboard):", error);
+                    if(historyItemModalBodyForDashboard) historyItemModalBodyForDashboard.innerHTML = `<div class="alert alert-danger">Falha na comunicação ao buscar detalhes.</div>`;
                 }
             }
 
             if (deleteButton) {
                 const historyId = deleteButton.dataset.historyId;
-                Swal.fire({ /* ... config de confirmação ... */ }).then(async (result) => {
+                Swal.fire({
+                    title: 'Confirmar Exclusão',
+                    text: "Tem certeza que deseja excluir este item do histórico?",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#d33',cancelButtonColor: '#3085d6',
+                    confirmButtonText: 'Sim, excluir!', cancelButtonText: 'Cancelar',
+                    customClass: { popup: 'shadow-lg rounded-3' }
+                }).then(async (result) => {
                     if (result.isConfirmed) {
                         showGlobalLoader(true);
+                        if (!pageCsrfToken) {
+                            showGlobalAlert('error', 'Erro de Segurança', 'Token CSRF não encontrado. Recarregue a página.');
+                            showGlobalLoader(false); return;
+                        }
                         try {
                             const response = await axios.post('api/delete_history_item.php', { id: historyId, csrf_token: pageCsrfToken });
                             if (response.data.success) {
                                 showGlobalToast('success', 'Item do histórico excluído.');
                                 deleteButton.closest('li.list-group-item').remove();
-                                if (recentHistoryContainer.querySelectorAll('li.list-group-item').length === 0) {
-                                    recentHistoryContainer.querySelector('ul.list-group').innerHTML = '<p class="text-muted text-center mt-3">Nenhum prompt gerado ainda.</p>';
+                                const listGroup = recentHistoryContainer.querySelector('ul.list-group');
+                                if (listGroup && listGroup.children.length === 0) {
+                                    listGroup.innerHTML = '<p class="text-muted text-center mt-3 mb-3">Nenhum prompt gerado recentemente.</p>';
+                                    const footerLink = recentHistoryContainer.closest('.card').querySelector('.card-footer a');
+                                    if(footerLink) footerLink.style.display = 'none';
                                 }
-                            } else { /* ... tratamento de erro ... */ }
-                        } catch (error) { /* ... tratamento de erro ... */ }
+                            } else { showGlobalAlert('error', 'Erro ao Excluir', sanitizeHTML(response.data.error || 'Não foi possível excluir.')); }
+                        } catch (error) { console.error("Erro ao excluir (dashboard):", error); showGlobalAlert('error', 'Erro na Requisição', 'Falha ao excluir.'); }
                         finally { showGlobalLoader(false); }
                     }
                 });
@@ -510,45 +505,170 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
     
-    // Função para renderizar conteúdo no modal de histórico (pode ser a mesma de history-page.js ou adaptada)
-    function renderHistoryItemModalContent(item, modalBodyElement) {
-        if (!modalBodyElement) return;
-         const inputParams = JSON.parse(item.input_parameters || '{}');
-         const geminiParams = JSON.parse(item.gemini_parameters_used || '{}');
-         // ... (código HTML para renderizar detalhes do item, similar ao de history-page.js) ...
-         // Simplificado para este exemplo:
-         let html = `<h5>Prompt Enviado:</h5><pre>${sanitizeHTML(inputParams.final_prompt_text || inputParams.raw_prompt_text || 'N/A')}</pre>
-                     <h5>Resultado:</h5><pre>${sanitizeHTML(item.generated_text)}</pre>
-                     <p><small>Data: ${new Date(item.created_at).toLocaleString('pt-BR')}</small></p>`;
-         modalBodyElement.innerHTML = html;
+    function renderHistoryItemModalContentForDashboard(item) { // Renomeada para evitar conflito se history-page.js for incluído junto
+        if (!historyItemModalBodyForDashboard) return;
+        const inputParams = JSON.parse(item.input_parameters || '{}');
+        // ... (Lógica de renderização HTML similar à de history-page.js, mas dentro de historyItemModalBodyForDashboard)
+        // Adaptar para mostrar o que é relevante no modal do dashboard.
+        // Pode ser um pouco mais conciso que o modal da página de histórico completo.
+        let html = `
+            <h5><i class="fas fa-file-alt me-2 text-primary"></i>Prompt Enviado à IA:</h5>
+            <pre class="bg-light p-3 border rounded mb-3" style="font-size:0.9em; max-height: 200px; overflow-y: auto;">${sanitizeHTML(inputParams.final_prompt_text || inputParams.raw_prompt_text || 'N/A')}</pre>
+            
+            <h5><i class="fas fa-robot me-2 text-success"></i>Resultado Gerado:</h5>
+            <pre class="bg-light p-3 border rounded mb-3" style="font-size:0.9em; max-height: 300px; overflow-y: auto;">${sanitizeHTML(item.generated_text)}</pre>
+            <hr class="my-3">
+            <p class="text-center"><small class="text-muted">Gerado em: ${new Date(item.created_at).toLocaleString('pt-BR')}</small></p>`;
+        historyItemModalBodyForDashboard.innerHTML = html;
     }
     
-    // Copiar do modal de histórico (se os botões estiverem no modal do dashboard)
-    if(copyHistoryInputBtn) { /* ... mesma lógica de history-page.js ... */ }
-    if(copyHistoryOutputBtn) { /* ... mesma lógica de history-page.js ... */ }
+    // Lógica para os botões de copiar e editar DENTRO do modal de histórico do DASHBOARD
+    if(modalCopyInputBtnDashboard && historyItemModalBodyForDashboard) {
+        modalCopyInputBtnDashboard.addEventListener('click', () => {
+            const inputPres = historyItemModalBodyForDashboard.querySelectorAll('pre');
+            if (inputPres.length > 0 && inputPres[0].textContent) {
+                navigator.clipboard.writeText(inputPres[0].textContent)
+                    .then(() => showGlobalToast('success', 'Input copiado!'))
+                    .catch(err => showGlobalAlert('error', 'Falha ao Copiar'));
+            }
+        });
+    }
+    if(modalCopyOutputBtnDashboard && historyItemModalBodyForDashboard) {
+         modalCopyOutputBtnDashboard.addEventListener('click', () => {
+            const outputPres = historyItemModalBodyForDashboard.querySelectorAll('pre');
+            if (outputPres.length > 1 && outputPres[1].textContent) {
+                navigator.clipboard.writeText(outputPres[1].textContent)
+                    .then(() => showGlobalToast('success', 'Output copiado!'))
+                    .catch(err => showGlobalAlert('error', 'Falha ao Copiar'));
+            }
+        });
+    }
+    if(modalEditBtnDashboard){ // Botão de editar do modal do dashboard
+        modalEditBtnDashboard.addEventListener('click', function(){
+            const historyIdToEdit = this.dataset.historyId || currentViewingHistoryItemIdDashboard;
+            if(historyIdToEdit){
+                localStorage.setItem('editHistoryItemId', historyIdToEdit);
+                if(historyItemModalInstanceForDashboard) historyItemModalInstanceForDashboard.hide();
+                // Rolar para o topo da página para ver o formulário preenchido
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                // A lógica de carregar para edição já está no final deste script
+                loadHistoryItemForEditing(historyIdToEdit); // Chama diretamente a função
+            } else {
+                showGlobalToast('warning', 'ID do item não encontrado para edição.');
+            }
+        });
+    }
 
 
     // --- LÓGICA DO MODAL DE ASSISTÊNCIA IA ---
-    if (aiActionTypeSelect) { /* ... (código já existente, sem grandes mudanças aqui para UX, exceto a limpeza do modal) ... */ }
-    if (runAiAssistantBtn) { /* ... (código já existente) ... */ }
+    if (aiActionTypeSelect) {
+        aiActionTypeSelect.addEventListener('change', function() {
+            const selectedAction = this.value;
+            if(aiAssistantInputArea) aiAssistantInputArea.classList.add('d-none');
+            if(aiAssistantToneSelectorArea) aiAssistantToneSelectorArea.classList.add('d-none');
+            if(aiAssistantResultOutputDiv) aiAssistantResultOutputDiv.innerHTML = '';
+            if(applyAiAssistantResultBtn) applyAiAssistantResultBtn.classList.add('d-none');
+            currentAiAssistantOutput = "";
+            currentAiAssistantActionType = selectedAction;
+
+            if (selectedAction === 'expand_idea') {
+                if(aiAssistantInputArea) aiAssistantInputArea.classList.remove('d-none');
+                if(aiAssistantUserInputLabel) aiAssistantUserInputLabel.textContent = 'Sua ideia curta para expandir:';
+                if(aiAssistantUserInput) { aiAssistantUserInput.value = ''; aiAssistantUserInput.placeholder = 'Ex: Um poema sobre a lua para crianças';}
+            } else if (selectedAction === 'change_tone') {
+                if(aiAssistantInputArea) aiAssistantInputArea.classList.remove('d-none');
+                if(aiAssistantUserInputLabel) aiAssistantUserInputLabel.textContent = 'Texto para alterar o tom (opcional, usa prompt principal se vazio):';
+                if(aiAssistantUserInput) {aiAssistantUserInput.value = ''; aiAssistantUserInput.placeholder = 'Cole o texto aqui ou deixe em branco.';}
+                if(aiAssistantToneSelectorArea) aiAssistantToneSelectorArea.classList.remove('d-none');
+            }
+        });
+    }
+
+    if (runAiAssistantBtn) {
+        runAiAssistantBtn.addEventListener('click', async function() {
+            // ... (lógica existente de runAiAssistantBtn, sem grandes mudanças) ...
+            if (!currentAiAssistantActionType) { showGlobalToast('warning', 'Selecione um tipo de assistência.'); return; }
+            if(runAiAssistantBtnSpinner) runAiAssistantBtnSpinner.classList.remove('d-none');
+            runAiAssistantBtn.disabled = true;
+            if(aiAssistantResultOutputDiv) aiAssistantResultOutputDiv.innerHTML = '<div class="text-center p-3"><div class="spinner-border text-info" role="status"></div><p class="mt-2 text-muted">Assistente IA processando...</p></div>';
+            if(applyAiAssistantResultBtn) applyAiAssistantResultBtn.classList.add('d-none');
+
+            let currentPromptForAssistant = '';
+            if (ckEditorPromptInstance) currentPromptForAssistant = ckEditorPromptInstance.getData();
+            else if (document.getElementById('prompt_main_text_fallback')) currentPromptForAssistant = document.getElementById('prompt_main_text_fallback').value;
+            else if (hiddenPromptTextarea) currentPromptForAssistant = hiddenPromptTextarea.value;
+            
+            const payload = {
+                action_type: currentAiAssistantActionType,
+                current_prompt_text: currentPromptForAssistant,
+                user_input_idea: (currentAiAssistantActionType === 'expand_idea' && aiAssistantUserInput) ? aiAssistantUserInput.value : '',
+                new_tone: (currentAiAssistantActionType === 'change_tone' && aiAssistantNewToneSelect) ? aiAssistantNewToneSelect.value : '',
+                suggestion_count: (aiSuggestionCountInput) ? parseInt(aiSuggestionCountInput.value) : 3
+            };
+            if (currentAiAssistantActionType === 'change_tone' && aiAssistantUserInput && aiAssistantUserInput.value.trim() !== '') {
+                payload.current_prompt_text = aiAssistantUserInput.value.trim();
+            }
+
+            try {
+                const response = await axios.post('api/ai_assistant.php', payload);
+                if (response.data.success && response.data.assisted_text) {
+                    currentAiAssistantOutput = response.data.assisted_text;
+                    if (payload.action_type === 'suggest_variations' && currentAiAssistantOutput.includes('---VARIANT---')) {
+                        // ... (lógica de renderizar variações com radio buttons) ...
+                        const variations = currentAiAssistantOutput.split('---VARIANT---').map(v => v.trim()).filter(Boolean);
+                        let variationsHtml = '<p class="mb-2">Selecione uma variação para aplicar ao seu prompt principal:</p><div class="list-group">';
+                        variations.forEach((variant, index) => {
+                            variationsHtml += `
+                                <label class="list-group-item list-group-item-action small p-2">
+                                    <input class="form-check-input me-2" type="radio" name="aiVariation" value="${index}">
+                                    ${sanitizeHTML(variant).replace(/\n/g, '<br>')}
+                                </label>`;
+                        });
+                        variationsHtml += '</div>';
+                        if(aiAssistantResultOutputDiv) aiAssistantResultOutputDiv.innerHTML = variationsHtml;
+
+                    } else {
+                        if(aiAssistantResultOutputDiv) aiAssistantResultOutputDiv.innerHTML = sanitizeHTML(currentAiAssistantOutput).replace(/\n/g, '<br>');
+                    }
+                    if(applyAiAssistantResultBtn) applyAiAssistantResultBtn.classList.remove('d-none');
+                } else {
+                    if(aiAssistantResultOutputDiv) aiAssistantResultOutputDiv.innerHTML = `<div class="alert alert-danger p-2">${sanitizeHTML(response.data.error || 'Erro desconhecido do assistente.')}</div>`;
+                }
+            } catch (error) { /* ... (tratamento de erro) ... */
+                 console.error("Erro na assistência IA:", error);
+                let errorMsg = 'Falha na comunicação com o assistente IA.';
+                if (error.response && error.response.data && error.response.data.error) { errorMsg = error.response.data.error;}
+                if(aiAssistantResultOutputDiv) aiAssistantResultOutputDiv.innerHTML = `<div class="alert alert-danger p-2">${sanitizeHTML(errorMsg)}</div>`;
+            } finally {
+                if(runAiAssistantBtnSpinner) runAiAssistantBtnSpinner.classList.add('d-none');
+                if(runAiAssistantBtn) runAiAssistantBtn.disabled = false;
+            }
+        });
+    }
+
     if (applyAiAssistantResultBtn) {
         applyAiAssistantResultBtn.addEventListener('click', function() {
-            // ... (lógica existente para aplicar) ...
+            let textToApply = currentAiAssistantOutput;
+            if (currentAiAssistantActionType === 'suggest_variations') {
+                const selectedVariationRadio = aiAssistantResultOutputDiv ? aiAssistantResultOutputDiv.querySelector('input[name="aiVariation"]:checked') : null;
+                if (selectedVariationRadio) {
+                    const variations = currentAiAssistantOutput.split('---VARIANT---').map(v => v.trim()).filter(Boolean);
+                    textToApply = variations[parseInt(selectedVariationRadio.value)];
+                } else { showGlobalToast('warning', 'Por favor, selecione uma variação.'); return; }
+            }
+
             if (textToApply) {
-                if (ckEditorPromptInstance) {
-                    ckEditorPromptInstance.setData(textToApply);
-                } else if (document.getElementById('prompt_main_text_fallback')) {
-                    document.getElementById('prompt_main_text_fallback').value = textToApply;
-                } else if (hiddenPromptTextarea) {
-                    hiddenPromptTextarea.value = textToApply;
-                }
+                if (ckEditorPromptInstance) ckEditorPromptInstance.setData(textToApply);
+                else if (document.getElementById('prompt_main_text_fallback')) document.getElementById('prompt_main_text_fallback').value = textToApply;
+                else if (hiddenPromptTextarea) hiddenPromptTextarea.value = textToApply;
+                if (hiddenPromptTextarea) hiddenPromptTextarea.value = textToApply; // Sincroniza
+                
                 showGlobalToast('success', 'Resultado da assistência aplicado ao prompt!');
-                if(aiAssistanceModalInstance) aiAssistanceModalInstance.hide(); // Fecha o modal
-            } else { /* ... */ }
+                if(aiAssistanceModalInstance) aiAssistanceModalInstance.hide();
+            } else { showGlobalToast('info', 'Nenhum resultado para aplicar.'); }
         });
     }
     
-    // Limpar modal de assistência ao fechar
     if (aiAssistanceModalElement) {
         aiAssistanceModalElement.addEventListener('hidden.bs.modal', function () {
             if(aiActionTypeSelect) aiActionTypeSelect.value = '';
@@ -557,8 +677,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if(aiAssistantUserInput) aiAssistantUserInput.value = '';
             if(aiAssistantResultOutputDiv) aiAssistantResultOutputDiv.innerHTML = '<!-- Resultado da assistência IA aqui -->';
             if(applyAiAssistantResultBtn) applyAiAssistantResultBtn.classList.add('d-none');
-            currentAiAssistantOutput = "";
-            currentAiAssistantActionType = "";
+            currentAiAssistantOutput = ""; currentAiAssistantActionType = "";
             if(runAiAssistantBtnSpinner) runAiAssistantBtnSpinner.classList.add('d-none');
             if(runAiAssistantBtn) runAiAssistantBtn.disabled = false;
         });
@@ -577,36 +696,42 @@ document.addEventListener('DOMContentLoaded', function () {
                 const item = response.data.item;
                 const inputParams = JSON.parse(item.input_parameters || '{}');
 
-                // Limpar campos de template e prompt base atuais
                 if (promptTemplateSelect) promptTemplateSelect.value = '';
-                customTemplateFieldsContainer.innerHTML = '';
+                if (customTemplateFieldsContainer) customTemplateFieldsContainer.innerHTML = '';
                 
                 let basePromptValue = inputParams.raw_prompt_text || '';
-                if (ckEditorPromptInstance) {
-                   ckEditorPromptInstance.setData(basePromptValue);
-                } else if (document.getElementById('prompt_main_text_fallback')) {
-                   document.getElementById('prompt_main_text_fallback').value = basePromptValue;
-                } else if (hiddenPromptTextarea) {
-                   hiddenPromptTextarea.value = basePromptValue;
-                }
+                if (ckEditorPromptInstance) ckEditorPromptInstance.setData(basePromptValue);
+                else if (document.getElementById('prompt_main_text_fallback')) document.getElementById('prompt_main_text_fallback').value = basePromptValue;
+                else if (hiddenPromptTextarea) hiddenPromptTextarea.value = basePromptValue;
+                if (hiddenPromptTextarea) hiddenPromptTextarea.value = basePromptValue;
 
 
                 const genSettings = inputParams.generation_settings_input || {};
                 if (temperatureSlider && genSettings.temperature !== undefined) {
                     temperatureSlider.value = genSettings.temperature;
                     if(tempValueDisplay) tempValueDisplay.textContent = genSettings.temperature;
-                    temperatureSlider.dispatchEvent(new Event('input')); // Para atualizar a cor do badge
+                    temperatureSlider.dispatchEvent(new Event('input'));
+                } else if (temperatureSlider) { // Reset to default if not in history item
+                    temperatureSlider.value = 0.7; // Seu valor padrão
+                     if(tempValueDisplay) tempValueDisplay.textContent = temperatureSlider.value;
+                    temperatureSlider.dispatchEvent(new Event('input'));
                 }
+
                 if (maxOutputTokensInput && genSettings.maxOutputTokens !== undefined) {
                     maxOutputTokensInput.value = genSettings.maxOutputTokens;
+                } else if (maxOutputTokensInput) {
+                    maxOutputTokensInput.value = 1024; // Seu valor padrão
                 }
+
 
                 if (inputParams.template_id_used && promptTemplateSelect) {
                     promptTemplateSelect.value = inputParams.template_id_used;
                     const changeEvent = new Event('change', { bubbles: true });
-                    promptTemplateSelect.dispatchEvent(changeEvent);
+                    promptTemplateSelect.dispatchEvent(changeEvent); // Isso vai carregar os campos customizados
 
-                    setTimeout(() => { // Espera os campos do template serem criados
+                    // Precisamos esperar os campos serem criados antes de tentar preenchê-los
+                    // Um MutationObserver seria mais robusto, mas setTimeout é mais simples para este exemplo
+                    setTimeout(() => {
                         if (inputParams.template_custom_values) {
                             for (const fieldName in inputParams.template_custom_values) {
                                 const fieldInput = document.getElementById(`template_field_${fieldName}`);
@@ -615,21 +740,18 @@ document.addEventListener('DOMContentLoaded', function () {
                                 }
                             }
                         }
-                        showGlobalToast('info', 'Item do histórico carregado para edição no formulário.');
-                    }, 700); // Aumentei um pouco o delay para garantir
+                        showGlobalToast('info', 'Item do histórico carregado para edição.');
+                    }, 800); // Ajuste o delay se os campos do template demorarem para renderizar
                 } else {
-                     showGlobalToast('info', 'Item do histórico carregado para edição no formulário.');
+                     showGlobalToast('info', 'Item do histórico carregado para edição.');
                 }
                 
-                // Scroll para o topo do formulário
-                if(promptGenerationForm) promptGenerationForm.scrollIntoView({ behavior: 'smooth' });
+                if(promptGenerationForm) promptGenerationForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-            } else {
-                showGlobalAlert('error', 'Erro ao Carregar', response.data.error || 'Item do histórico não encontrado.');
-            }
+            } else { showGlobalAlert('error', 'Erro ao Carregar', response.data.error || 'Item do histórico não encontrado.'); }
         } catch (error) {
             console.error('Erro ao carregar item do histórico para edição:', error);
-            showGlobalAlert('error', 'Erro na Requisição', 'Não foi possível carregar o item do histórico para edição.');
+            showGlobalAlert('error', 'Erro na Requisição', 'Não foi possível carregar o item do histórico.');
         } finally {
             showGlobalLoader(false);
             localStorage.removeItem('editHistoryItemId');
@@ -642,10 +764,12 @@ document.addEventListener('DOMContentLoaded', function () {
     if (editHistoryItemIdFromStorage) {
         loadHistoryItemForEditing(editHistoryItemIdFromStorage);
     } else if (urlHashForEdit === '#editHistory' || urlHashForEdit.startsWith('#editHistory_') || urlHashForEdit === '#edit') {
-        const idFromHash = urlHashForEdit.split('_')[1];
-        if(idFromHash) loadHistoryItemForEditing(idFromHash);
-        // Se não houver ID no hash mas o hash existir, poderia tentar pegar do localStorage
-        // Mas a lógica acima já cobre isso.
+        const idFromHash = urlHashForEdit.split('_')[1] || urlHashForEdit.split('#editHistory')[1] || urlHashForEdit.split('#edit')[1];
+        if(idFromHash && !isNaN(parseInt(idFromHash))) {
+             loadHistoryItemForEditing(parseInt(idFromHash));
+        } else if (localStorage.getItem('editHistoryItemId')) { // Dupla verificação
+            loadHistoryItemForEditing(localStorage.getItem('editHistoryItemId'));
+        }
     }
 
 }); // Fim do DOMContentLoaded

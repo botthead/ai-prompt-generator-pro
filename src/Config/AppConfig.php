@@ -13,7 +13,7 @@ define('BASE_URL', 'http://localhost/ai-prompt-generator-pro/public');
 // IMPORTANTE: Gere uma chave forte e única para sua aplicação.
 // Use, por exemplo, `openssl_random_pseudo_bytes(32)` para gerar uma.
 // NÃO USE ESTA CHAVE PADRÃO EM PRODUÇÃO.
-define('ENCRYPTION_KEY', 'ColoqueSuaChaveDe32BytesSuperSecretaAqui!'); // Exemplo: base64_encode(openssl_random_pseudo_bytes(32))
+define('ENCRYPTION_KEY', 'g93wYKrzVlhiBvEejuGLj208hlQDkVLIdQJe4DDLKbE'); // Exemplo: base64_encode(openssl_random_pseudo_bytes(32))
 define('ENCRYPTION_CIPHER', 'AES-256-CBC'); // Algoritmo de criptografia
 
 // Configurações de Sessão

@@ -527,5 +527,20 @@ document.addEventListener('DOMContentLoaded', function () {
     if(aiAssistantActionsListDiv) renderAiAssistantActions(); 
     // Chamar para carregar o histórico recente inicial no dashboard
     if(recentHistoryContainer) fetchRecentHistory(); // Ou deixar o PHP carregar inicialmente
+// ... (outras lógicas do dashboard) ...
+
+    // Delegação para botões de exportação no modal de histórico (se o modal for o mesmo ID)
+    if (historyItemModalElementForDashboard) { // Verifica se o elemento do modal existe nesta página
+        historyItemModalElementForDashboard.addEventListener('click', function(event) {
+            const exportBtn = event.target.closest('.export-single-history-btn-modal');
+            if (exportBtn && currentViewingHistoryItemIdDashboard) { // Usa a variável de ID do dashboard
+                event.preventDefault();
+                const format = exportBtn.dataset.format;
+                // O endpoint 'export_data.php' já lida com dataType 'history_single'
+                window.location.href = `api/export_data.php?type=history_single&itemId=${currentViewingHistoryItemIdDashboard}&format=${format}`;
+            }
+        });
+    }
+    // ... (resto do dashboard-main.js) ...
 
 }); // Fim do DOMContentLoaded

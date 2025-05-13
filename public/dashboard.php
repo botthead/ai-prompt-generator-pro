@@ -13,31 +13,38 @@ $promptService = new PromptService();
 $templateManager = new TemplateManager();
 
 // Buscar histórico recente
-$historyItems = $promptService->getHistoryForUser($userId, 5); // Pega os 5 mais recentes
+// O método getHistoryForUser já retorna generated_text_preview e generated_text completo.
+$historyItems = $promptService->getHistoryForUser($userId, 5, 0); 
 
 // Buscar templates do usuário para o dropdown
 $userTemplates = $templateManager->getTemplatesByUser($userId);
 
-$csrfToken = Auth::generateCsrfToken(); // Para o formulário de geração principal
+// Token CSRF para o formulário de geração principal (se não usar o global do Axios para este form específico)
+// Se o Axios global está configurado com X-CSRF-TOKEN, este input hidden pode não ser necessário para a chamada AJAX.
+// Mas, para formulários que podem ter um submit não-AJAX como fallback, é bom ter.
+// $csrfTokenGenerateForm = Auth::generateCsrfToken(); 
 ?>
 
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">Dashboard</h1>
+    <h1 class="h2"><i class="fas fa-tachometer-alt me-2"></i>Dashboard</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
         <button type="button" class="btn btn-sm btn-outline-primary me-2" data-bs-toggle="modal" data-bs-target="#aiAssistanceModal">
             <i class="fas fa-magic me-1"></i> Assistente de Prompt IA
         </button>
-        <a href="templates.php" class="btn btn-sm btn-outline-secondary">
+        <a href="templates.php" class="btn btn-sm btn-outline-secondary me-2">
             <i class="fas fa-file-alt me-1"></i> Gerenciar Templates
+        </a>
+        <a href="history.php" class="btn btn-sm btn-outline-info">
+            <i class="fas fa-history me-1"></i> Histórico Completo
         </a>
     </div>
 </div>
-<!-- ADICIONADO/MODIFICADO AQUI -->
-<div id="apiKeyStatusIndicator" class="alert alert-info small py-2 mb-3" role="alert" style="display: none;">
-    <i class="fas fa-key me-2"></i>Status da API Key Gemini: <strong id="apiKeyStatusText">Verificando...</strong>
+
+<div id="apiKeyStatusIndicator" class="alert alert-info small py-2 mb-3 align-items-center justify-content-between" role="alert" style="display: none;">
+    <span><i class="fas fa-key me-2"></i>Status da API Key Gemini: <strong id="apiKeyStatusText">Verificando...</strong></span>
     <a href="profile.php" class="alert-link ms-2 fw-bold" id="apiKeyConfigureLink" style="display:none;">Configurar Chave Agora</a>
 </div>
-<!-- FIM DA ADIÇÃO/MODIFICAÇÃO -->
+
 <div class="row">
     <!-- Coluna Principal: Geração de Prompt -->
     <div class="col-lg-7 col-md-12 mb-4">
@@ -47,44 +54,50 @@ $csrfToken = Auth::generateCsrfToken(); // Para o formulário de geração princ
             </div>
             <div class="card-body">
                 <form id="promptGenerationForm">
-                    <input type="hidden" name="csrf_token_generate" value="<?php echo htmlspecialchars($csrfToken); ?>">
+                    <!-- <input type="hidden" name="csrf_token_generate" value="<?php echo htmlspecialchars($csrfTokenGenerateForm); ?>"> -->
                     
-                        <div class="mb-3">
-                            <label for="prompt_main_text_editor_container" class="form-label">Seu Prompt Base (ou estrutura do template):<span class="text-danger">*</span></label>
-                            <div id="prompt_main_text_editor_container">
-                                <!-- CKEditor será instanciado aqui pelo JS -->
-                            </div>
-                            <textarea name="prompt_main_text" id="prompt_main_text_hidden" style="display:none;" required></textarea> <!-- Hidden textarea para validação e submissão se JS falhar ou para conveniência -->
-                            <small class="form-text text-muted mt-1">Se selecionou um template, a estrutura aparecerá aqui. Preencha os campos personalizados (se houver) que aparecerão acima.</small>
-                        </div>
+                    <div class="mb-3">
+                        <label for="promptTemplate" class="form-label">Usar Template:</label>
+                        <select class="form-select" id="promptTemplate">
+                            <option value="">-- Nenhum Template (Começar do Zero) --</option>
+                            <?php foreach ($userTemplates as $template): ?>
+                                <option value="<?php echo htmlspecialchars($template['id']); ?>">
+                                    <?php echo htmlspecialchars($template['name']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
 
                     <div id="customTemplateFieldsContainer" class="mb-3">
                         <!-- Campos do template carregado via JS aparecerão aqui -->
                     </div>
 
                     <div class="mb-3">
-                        <label for="prompt_main_text" class="form-label">Seu Prompt Base (ou estrutura do template):<span class="text-danger">*</span></label>
-                        <!-- Para V1, um textarea. CKEditor pode ser adicionado depois. -->
-                        <textarea class="form-control" id="prompt_main_text" name="prompt_main_text" rows="8" placeholder="Descreva o que você quer que a IA gere. Use {{placeholders}} se estiver usando um template." required></textarea>
-                        <!-- Se usar CKEditor: <div id="prompt_main_text_editor"></div> -->
-                        <small class="form-text text-muted">Se selecionou um template, a estrutura aparecerá aqui. Preencha os campos acima se o template os solicitar.</small>
+                        <label for="prompt_main_text_editor_container" class="form-label">Seu Prompt Base (ou estrutura do template):<span class="text-danger">*</span></label>
+                        <div id="prompt_main_text_editor_container">
+                            <!-- CKEditor será instanciado aqui pelo JS -->
+                        </div>
+                        <textarea name="prompt_main_text_hidden" id="prompt_main_text_hidden" style="display:none;" required></textarea>
+                        <small class="form-text text-muted mt-1">Se selecionou um template, a estrutura aparecerá aqui. Preencha os campos personalizados (se houver).</small>
                     </div>
 
                     <h5 class="mt-4 mb-3">Parâmetros da Geração (Opcional)</h5>
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label for="temperature" class="form-label">Temperatura (Criatividade): <span id="tempValueDisplay" class="badge bg-secondary">0.7</span></label>
+                            <label for="temperature" class="form-label">
+                                Temperatura (Criatividade): <span id="tempValueDisplay" class="badge bg-secondary">0.7</span>
+                                <i class="fas fa-info-circle ms-1 text-muted" data-bs-toggle="tooltip" data-bs-placement="top" title="Controla a aleatoriedade. Valores mais altos (ex: 1.0-2.0) = mais criativo. Valores baixos (ex: 0.2) = mais focado. Padrão Gemini Flash: 0.9-1.0."></i>
+                            </label>
                             <input type="range" class="form-range" id="temperature" name="temperature" min="0" max="2" step="0.1" value="0.7">
-                            <small class="form-text text-muted">Valores mais altos = mais criativo/aleatório. Padrão Gemini: 0.9-1.0 para Flash, pode variar.</small>
                         </div>
                         <div class="col-md-6 mb-3">
                             <label for="maxOutputTokens" class="form-label">Máx. Tokens de Saída:</label>
-                            <input type="number" class="form-control form-control-sm" id="maxOutputTokens" name="maxOutputTokens" min="10" max="8192" value="1024" placeholder="Ex: 1024">
+                            <input type="number" class="form-control form-control-sm" id="maxOutputTokens" name="maxOutputTokens" min="50" max="8192" value="1024" placeholder="Ex: 1024">
+                             <small class="form-text text-muted">Define o tamanho máximo da resposta.</small>
                         </div>
-                        <!-- Adicionar Top-K, Top-P se desejar -->
                     </div>
                     
-                    <button type="submit" class="btn btn-primary btn-lg w-100" id="generatePromptBtn">
+                    <button type="submit" class="btn btn-primary btn-lg w-100 mt-3" id="generatePromptBtn">
                         <span class="spinner-border spinner-border-sm d-none me-2" role="status" aria-hidden="true"></span>
                         <i class="fas fa-cogs me-2"></i>Gerar Prompt com IA
                     </button>
@@ -100,7 +113,7 @@ $csrfToken = Auth::generateCsrfToken(); // Para o formulário de geração princ
                 </button>
             </div>
             <div class="card-body">
-                <div id="generatedResultOutput" class="p-2" style="min-height: 150px; white-space: pre-wrap; word-wrap: break-word; font-family: 'Roboto Mono', monospace; background-color: #f8f9fa; border-radius: 0.375rem; border: 1px solid #dee2e6; max-height: 500px; overflow-y: auto;">
+                <div id="generatedResultOutput" class="p-3" style="min-height: 200px; white-space: pre-wrap; word-wrap: break-word; font-family: 'Roboto Mono', Menlo, Monaco, Consolas, 'Courier New', monospace; background-color: #f8f9fa; border-radius: 0.375rem; border: 1px solid #dee2e6; max-height: 500px; overflow-y: auto;">
                     <!-- O resultado aparecerá aqui... -->
                 </div>
             </div>
@@ -113,130 +126,144 @@ $csrfToken = Auth::generateCsrfToken(); // Para o formulário de geração princ
             <div class="card-header">
                 <h4><i class="fas fa-history me-2"></i>Histórico Recente</h4>
             </div>
-            <div class="card-body" id="recentHistoryContainer" style="max-height: 600px; overflow-y: auto;">
-                <?php if (empty($historyItems)): ?>
-                    <p class="text-muted text-center mt-3">Nenhum prompt gerado ainda.</p>
-                <?php else: ?>
-                    <ul class="list-group list-group-flush">
+            <div class="card-body p-0" id="recentHistoryContainer">
+                <ul class="list-group list-group-flush">
+                    <?php if (empty($historyItems)): ?>
+                        <li class="list-group-item text-muted text-center p-4">Nenhum prompt gerado recentemente.</li>
+                    <?php else: ?>
                         <?php foreach ($historyItems as $item):
                             $inputData = json_decode($item['input_parameters'], true);
-                            $promptBasePreview = $inputData['prompt_base'] ?? ($inputData['raw_prompt_text'] ?? 'N/A');
+                            $promptBasePreview = $inputData['final_prompt_text'] ?? ($inputData['raw_prompt_text'] ?? 'N/A');
+                            $outputPreview = $item['generated_text_preview'] ?? ($item['generated_text'] ? mb_substr($item['generated_text'], 0, 100) . '...' : 'N/A');
                         ?>
-                            <li class="list-group-item history-item">
+                            <li class="list-group-item history-item p-2">
                                 <div class="d-flex w-100 justify-content-between">
                                     <small class="text-muted">
-                                        <i class="fas fa-calendar-alt me-1"></i><?php echo date('d/m/Y H:i', strtotime($item['created_at'])); ?>
+                                        <i class="fas fa-calendar-alt me-1"></i><?php echo date('d/m/y H:i', strtotime($item['created_at'])); ?>
                                     </small>
                                     <div>
-                                        <button class="btn btn-sm btn-outline-info view-history-btn" data-history-id="<?php echo $item['id']; ?>" title="Visualizar Detalhes">
-                                            <i class="fas fa-eye"></i>
+                                        <button class="btn btn-sm btn-outline-info view-history-btn py-0 px-1 me-1" data-history-id="<?php echo $item['id']; ?>" title="Visualizar Detalhes">
+                                            <i class="fas fa-eye fa-xs"></i>
                                         </button>
-                                        <button class="btn btn-sm btn-outline-danger delete-history-btn" data-history-id="<?php echo $item['id']; ?>" title="Excluir">
-                                            <i class="fas fa-trash-alt"></i>
+                                        <button class="btn btn-sm btn-outline-danger delete-history-btn py-0 px-1" data-history-id="<?php echo $item['id']; ?>" title="Excluir">
+                                            <i class="fas fa-trash-alt fa-xs"></i>
                                         </button>
                                     </div>
                                 </div>
-                                <p class="mb-1 mt-1">
-                                    <strong>Input:</strong> <?php echo htmlspecialchars(mb_substr($promptBasePreview, 0, 70)); ?>...
+                                <p class="mb-1 mt-1 small cursor-pointer view-history-btn" data-history-id="<?php echo $item['id']; ?>" title="<?php echo htmlspecialchars($promptBasePreview);?>">
+                                    <strong>In:</strong> <?php echo htmlspecialchars(mb_substr($promptBasePreview, 0, 60)); ?><?php if(mb_strlen($promptBasePreview) > 60) echo '...'; ?>
                                 </p>
-                                <p class="mb-0 text-break">
-                                    <small><strong>Output:</strong> <?php echo htmlspecialchars(mb_substr($item['generated_text_preview'], 0, 100)); ?>...</small>
+                                <p class="mb-0 text-break small cursor-pointer view-history-btn" data-history-id="<?php echo $item['id']; ?>" title="<?php echo htmlspecialchars($item['generated_text']);?>">
+                                    <small><strong>Out:</strong> <?php echo htmlspecialchars(mb_substr($outputPreview, 0, 80)); ?><?php if(mb_strlen($outputPreview) > 80) echo '...'; ?></small>
                                 </p>
                             </li>
                         <?php endforeach; ?>
-                    </ul>
-                <?php endif; ?>
+                    <?php endif; ?>
+                </ul>
             </div>
             <?php if (!empty($historyItems)): ?>
             <div class="card-footer text-center">
-                <a href="history.php" class="btn btn-sm btn-outline-primary">Ver Histórico Completo</a>
+                <a href="history.php" class="btn btn-sm btn-outline-primary"><i class="fas fa-list-ul me-1"></i>Ver Histórico Completo</a>
             </div>
             <?php endif; ?>
         </div>
     </div>
 </div>
 
-<!-- Modal para Assistência IA (estrutura básica) -->
+<!-- Modal para Assistência IA (REFORMULADO) -->
 <div class="modal fade" id="aiAssistanceModal" tabindex="-1" aria-labelledby="aiAssistanceModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="aiAssistanceModalLabel"><i class="fas fa-magic me-2"></i>Assistente de Prompt IA</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="aiAssistanceModalLabel"><i class="fas fa-magic fa-fw me-2"></i>Assistente Inteligente de Prompts</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <label for="aiActionType" class="form-label">Que tipo de assistência você precisa?</label>
-                    <select class="form-select" id="aiActionType">
-                        <option value="">-- Selecione uma Ação --</option>
-                        <option value="analyze_prompt">Analisar meu prompt atual</option>
-                        <option value="suggest_variations">Sugerir variações do meu prompt</option>
-                        <option value="expand_idea">Expandir uma ideia curta para um prompt</option>
-                        <option value="simplify_prompt">Simplificar meu prompt atual</option>
-                        <option value="change_tone">Alterar o tom do meu prompt</option>
-                    </select>
-                </div>
-                <div id="aiAssistantInputArea" class="mb-3 d-none">
-                    <label for="aiAssistantUserInput" class="form-label" id="aiAssistantUserInputLabel">Sua Ideia/Texto:</label>
-                    <textarea class="form-control" id="aiAssistantUserInput" rows="3"></textarea>
-                    <div id="aiAssistantToneSelectorArea" class="mt-2 d-none">
-                         <label for="aiAssistantNewTone" class="form-label">Selecione o Novo Tom:</label>
-                         <select class="form-select" id="aiAssistantNewTone">
-                             <option value="formal">Formal</option>
-                             <option value="informal">Informal</option>
-                             <option value="criativo">Criativo</option>
-                             <option value="persuasivo">Persuasivo</option>
-                             <option value="tecnico">Técnico</option>
-                             <option value="entusiasmado">Entusiasmado</option>
-                         </select>
+            <div class="modal-body p-4">
+                <div class="row mb-3">
+                    <div class="col-md-auto">
+                        <label for="aiSuggestionCountModal" class="form-label fw-medium mb-0 pt-1">Sugestões por Ação:</label>
+                    </div>
+                    <div class="col-md-2">
+                        <input type="number" class="form-control form-control-sm" id="aiSuggestionCountModal" value="3" min="1" max="5" style="width: 70px;" aria-describedby="aiSuggestionCountHelp">
+                    </div>
+                    <div class="col-md">
+                        <small id="aiSuggestionCountHelp" class="form-text text-muted pt-1">Define o número de alternativas que a IA tentará gerar (quando aplicável).</small>
                     </div>
                 </div>
-                 <div class="mb-3">
-                    <label for="aiSuggestionCount" class="form-label">Número de sugestões (se aplicável):</label>
-                    <input type="number" class="form-control form-control-sm" id="aiSuggestionCount" value="3" min="1" max="5" style="width: 80px;">
+
+                <p class="text-muted mb-3">Selecione uma ferramenta de IA para refinar ou gerar ideias para seu prompt:</p>
+                
+                <div id="aiAssistantActionsList" class="list-group list-group-flush mb-4">
+                    <!-- Ações serão populadas aqui pelo JS -->
                 </div>
-                <button type="button" class="btn btn-info" id="runAiAssistantBtn">
-                    <span class="spinner-border spinner-border-sm d-none me-1" role="status" aria-hidden="true"></span>
-                    <i class="fas fa-play me-1"></i>Executar Assistência
+
+                <div id="aiAssistantDynamicInputArea" class="mb-3 p-3 border rounded bg-light" style="display: none;">
+                    <!-- Inputs dinâmicos (ex: textarea para "Expandir Ideia") aparecerão aqui -->
+                </div>
+                
+                <button type="button" class="btn btn-info w-100 mb-3 shadow-sm" id="runAiAssistantBtn" style="display:none;">
+                    <span class="spinner-border spinner-border-sm d-none me-2" role="status" aria-hidden="true"></span>
+                    <i class="fas fa-cogs me-2"></i>Processar com IA
                 </button>
-                <hr>
-                <h6>Resultado da Assistência:</h6>
-                <div id="aiAssistantResultOutput" class="p-2" style="min-height: 100px; white-space: pre-wrap; word-wrap: break-word; background-color: #e9ecef; border-radius: 0.25rem;">
-                    <!-- Resultado da assistência IA aqui -->
+                <hr class="my-4">
+
+                <label for="aiAssistantResultOutput" class="form-label fw-semibold mt-2">Resultado da Assistência:</label>
+                <div id="aiAssistantResultOutput" class="mt-1 p-3 border rounded bg-light" style="min-height: 150px; max-height: 350px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; font-family: 'Roboto Mono', Menlo, Monaco, Consolas, 'Courier New', monospace; font-size: 0.9em;">
+                    Selecione uma ação da lista acima para começar.
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-                <button type="button" class="btn btn-success d-none" id="applyAiAssistantResultBtn"><i class="fas fa-check me-1"></i>Aplicar ao Prompt</button>
+            <div class="modal-footer justify-content-between">
+                <div> <!-- Botões à esquerda -->
+                    <button type="button" class="btn btn-success btn-sm d-none shadow-sm" id="applyAiAssistantResultBtn" title="Aplicar ao editor de prompt principal">
+                        <i class="fas fa-check-circle me-2"></i>Aplicar ao Prompt Principal
+                    </button>
+                    <button type="button" class="btn btn-light btn-sm border d-none shadow-sm" id="copyAiAssistantResultBtn" title="Copiar resultado da assistência">
+                        <i class="fas fa-copy me-2"></i>Copiar Resultado
+                    </button>
+                </div>
+                <div> <!-- Botões à direita -->
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal" id="aiCloseModalBtn">Fechar</button>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Modal para Visualizar Item do Histórico -->
+<!-- Modal para Visualizar Item do Histórico (Mesmo modal usado pela página history.php) -->
 <div class="modal fade" id="historyItemModal" tabindex="-1" aria-labelledby="historyItemModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="historyItemModalLabel">Detalhes do Prompt Gerado</h5>
+                <h5 class="modal-title" id="historyItemModalLabel"><i class="fas fa-info-circle me-2"></i>Detalhes do Prompt Gerado</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="historyItemModalBody">
-                <!-- Conteúdo carregado via AJAX -->
-                <div class="text-center"><div class="spinner-border text-primary" role="status"></div></div>
+                <div class="text-center p-5"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Carregando...</p></div>
             </div>
-            <div class="modal-footer">
-                 <button type="button" class="btn btn-outline-primary" id="copyHistoryInputBtn"><i class="fas fa-copy"></i> Copiar Input</button>
-                 <button type="button" class="btn btn-primary" id="copyHistoryOutputBtn"><i class="fas fa-copy"></i> Copiar Output</button>
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            <div class="modal-footer justify-content-between">
+                 <div>
+                    <div class="dropdown">
+                        <button class="btn btn-outline-success btn-sm dropdown-toggle" type="button" id="exportHistoryItemDropdownModal" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-download me-1"></i> Exportar Item
+                        </button>
+                        <ul class="dropdown-menu" aria-labelledby="exportHistoryItemDropdownModal">
+                            <li><a class="dropdown-item export-single-history-btn-modal" href="#" data-format="json"><i class="fas fa-file-code fa-fw me-2"></i>JSON</a></li>
+                            <li><a class="dropdown-item export-single-history-btn-modal" href="#" data-format="txt"><i class="fas fa-file-alt fa-fw me-2"></i>TXT</a></li>
+                        </ul>
+                    </div>
+                </div>
+                <div>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="modalCopyHistoryInputBtn" title="Copiar Input Original"><i class="fas fa-paste me-1"></i>Input</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="modalCopyHistoryOutputBtn" title="Copiar Resultado Gerado"><i class="fas fa-copy me-1"></i>Output</button>
+                    <button type="button" class="btn btn-warning btn-sm" id="modalEditHistoryItemBtn" title="Carregar para Edição"><i class="fas fa-pencil-alt me-1"></i>Editar</button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-
 <?php
-// Script específico para o dashboard
-$pageScripts = ['dashboard-main.js']; // Vamos criar este arquivo
+$pageScripts = ['dashboard-main.js'];
 require_once __DIR__ . '/../src/Templates/footer.php';
-?> 
+?>

@@ -7,22 +7,25 @@ require_once __DIR__ . '/../../src/Core/PromptService.php';
 $auth = new Auth();
 if (!$auth->isLoggedIn()) {
     http_response_code(401);
-    echo json_encode(['success' => false, 'error' => 'Não autenticado.']);
+    echo json_encode(['success' => false, 'error' => 'Não autenticado. Por favor, faça login.']);
     exit;
 }
 
 $userId = $auth->getUserId();
 $promptService = new PromptService();
 
-// Definir limite para o histórico recente, pode ser um parâmetro GET se necessário
-$limit = filter_input(INPUT_GET, 'limit', FILTER_VALIDATE_INT, ['options' => ['default' => 5, 'min_range' => 1, 'max_range' => 20]]);
+// Pega o parâmetro 'limit' da URL, com um padrão de 5 se não for fornecido ou inválido.
+$limit = filter_input(INPUT_GET, 'limit', FILTER_VALIDATE_INT, [
+    'options' => ['default' => 5, 'min_range' => 1, 'max_range' => 20]
+]);
 
 try {
-    // Usar o método getHistoryForUser que já pega o preview e o texto completo.
-    // Este método já faz LIMIT e OFFSET, então o offset será 0 para os mais recentes.
+    // O método getHistoryForUser já retorna 'generated_text_preview' e 'generated_text' completo.
+    // O offset é 0 para pegar os itens mais recentes.
     $historyItems = $promptService->getHistoryForUser($userId, $limit, 0);
 
-    if ($historyItems === false) { // Se o método retornar false em erro de DB
+    if ($historyItems === false) {
+        // Isso pode indicar um erro na query dentro de getHistoryForUser
         http_response_code(500);
         echo json_encode(['success' => false, 'error' => 'Erro no banco de dados ao buscar histórico recente.']);
         exit;
@@ -30,17 +33,21 @@ try {
 
     echo json_encode([
         'success' => true,
-        'history' => $historyItems // Contém 'generated_text_preview' e 'generated_text' completo
+        'history' => $historyItems 
+        // Cada item em $historyItems já deve conter 'generated_text_preview' para a lista
+        // e 'generated_text' completo se o modal for usar o mesmo dado.
     ]);
 
 } catch (PDOException $e) {
-    // Logar o erro $e->getMessage()
+    // Logar $e->getMessage() em um ambiente de produção
+    error_log("PDOException in get_recent_history.php: " . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['success' => false, 'error' => 'Erro de banco de dados ao buscar histórico recente.']);
+    echo json_encode(['success' => false, 'error' => 'Erro de banco de dados ao processar sua solicitação.']);
 } catch (Exception $e) {
-    // Logar o erro $e->getMessage()
+    // Logar $e->getMessage()
+    error_log("Exception in get_recent_history.php: " . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['success' => false, 'error' => 'Ocorreu um erro inesperado ao buscar o histórico recente.']);
+    echo json_encode(['success' => false, 'error' => 'Ocorreu um erro inesperado.']);
 }
 exit;
 ?>
